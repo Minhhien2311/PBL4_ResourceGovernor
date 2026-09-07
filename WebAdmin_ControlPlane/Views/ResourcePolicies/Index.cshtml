@@ -1,0 +1,99 @@
+﻿@model IEnumerable<WebAdmin_ControlPlane.Models.ResourcePolicy>
+
+@{
+    ViewData["Title"] = "Danh sách Chính sách";
+}
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Danh sách chính sách</h3>
+        <div class="card-tools">
+            <a asp-action="Create" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-lg"></i> Tạo mới
+            </a>
+        </div>
+    </div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap">
+            <thead>
+                <tr>
+                    <th>Loại</th>
+                    <th>Tiến trình</th>
+                    <th>RAM (MB)</th>
+                    <th>Cổng</th>
+                    <th>Băng thông (Kbps)</th>
+                    <th>Trạng thái</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model != null && Model.Any())
+                {
+                    @foreach (var item in Model)
+                    {
+                        <tr>
+                            <td>
+                                @if (item.Type == WebAdmin_ControlPlane.Models.PolicyType.OsResource)
+                                {
+                                    <span class="badge bg-primary">OS Resource</span>
+                                }
+                                else if (item.Type == WebAdmin_ControlPlane.Models.PolicyType.NetworkQoS)
+                                {
+                                    <span class="badge bg-info">Network QoS</span>
+                                }
+                            </td>
+                            <td>@item.TargetProcess</td>
+                            <td>@item.MaxRamMB</td>
+                            <td>@item.TargetPort</td>
+                            <td>@item.MaxBandwidthKbps</td>
+                            <td>
+                                @if (item.IsActive)
+                                {
+                                    <span class="badge bg-success">Active</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Inactive</span>
+                                }
+                            </td>
+                            <td>
+                                <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-warning btn-sm" data-bs-toggle="tooltip" title="Sửa">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-info btn-sm" data-bs-toggle="tooltip" title="Chi tiết">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-danger btn-sm" data-bs-toggle="tooltip" title="Xóa">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="7" class="text-center">Chưa có chính sách nào.</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            $('[data-bs-toggle="tooltip"]').tooltip();
+
+            var successMsg = '@TempData["Success"]';
+            if (successMsg) {
+                toastr.success(successMsg);
+            }
+            var errorMsg = '@TempData["Error"]';
+            if (errorMsg) {
+                toastr.error(errorMsg);
+            }
+        });
+    </script>
+}

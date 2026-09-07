@@ -1,0 +1,220 @@
+﻿@model IEnumerable<WebAdmin_ControlPlane.Models.NodeStatus>
+
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<!-- Thẻ thống kê -->
+<div class="row">
+    <div class="col-lg-3 col-6">
+        <div class="small-box bg-info">
+            <div class="inner">
+                <h3 id="onlineNodesCount">@ViewBag.OnlineNodes</h3>
+                <p>Node Online</p>
+            </div>
+            <div class="icon">
+                <i class="bi bi-hdd-network"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-6">
+        <div class="small-box bg-success">
+            <div class="inner">
+                <h3 id="totalPoliciesCount">@ViewBag.TotalPolicies</h3>
+                <p>Tổng Chính sách</p>
+            </div>
+            <div class="icon">
+                <i class="bi bi-shield-lock"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-6">
+        <div class="small-box bg-warning">
+            <div class="inner">
+                <h3 id="todayEventsCount">@ViewBag.TodayEvents</h3>
+                <p>Sự kiện hôm nay</p>
+            </div>
+            <div class="icon">
+                <i class="bi bi-journal-text"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-6">
+        <div class="small-box bg-danger">
+            <div class="inner">
+                <h3 id="offlineNodesCount">@Model.Count(n => n.Status != "Running")</h3>
+                <p>Node Offline</p>
+            </div>
+            <div class="icon">
+                <i class="bi bi-exclamation-triangle"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Biểu đồ -->
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">RAM Usage (Agent)</h3>
+            </div>
+            <div class="card-body">
+                <canvas id="ramChart" style="min-height: 250px; height: 250px; max-height: 250px; max-width: 100%;"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">CPU Usage (Agent)</h3>
+            </div>
+            <div class="card-body">
+                <canvas id="cpuChart" style="min-height: 250px; height: 250px; max-height: 250px; max-width: 100%;"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bảng chi tiết node -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Trạng thái các Node</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap">
+                    <thead>
+                        <tr>
+                            <th>Loại Node</th>
+                            <th>Trạng thái</th>
+                            <th>CPU (%)</th>
+                            <th>RAM (MB)</th>
+                            <th>Processes</th>
+                            <th>Bandwidth (Kbps)</th>
+                            <th>Active Connections</th>
+                            <th>Last Heartbeat</th>
+                        </tr>
+                    </thead>
+                    <tbody id="nodeTableBody">
+                        @foreach (var node in Model)
+                        {
+                            <tr>
+                                <td>@node.NodeType</td>
+                                <td><span class="badge @(node.Status == "Running" ? "bg-success" : "bg-danger")">@node.Status</span></td>
+                                <td>@node.CPUUsagePercent</td>
+                                <td>@node.UsedRAM / @node.TotalRAM</td>
+                                <td>@node.ProcessCount</td>
+                                <td>@node.BandwidthInUse</td>
+                                <td>@node.ActiveConnections</td>
+                                <td>@node.LastHeartbeat.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Lấy dữ liệu ban đầu từ Model
+            var nodes = @Html.Raw(Json.Serialize(Model));
+            updateCharts(nodes);
+            updateTable(nodes);
+            updateStats(); // cập nhật thống kê ngay
+
+            // Cập nhật bảng và biểu đồ mỗi 5 giây
+            setInterval(function () {
+                $.get('@Url.Action("GetNodeStatus", "Dashboard")', function (data) {
+                    updateCharts(data);
+                    updateTable(data);
+                });
+                updateStats();
+            }, 5000);
+        });
+
+        function updateCharts(nodes) {
+            var ramLabels = [];
+            var ramData = [];
+            var cpuLabels = [];
+            var cpuData = [];
+
+            nodes.forEach(function (node) {
+                ramLabels.push(node.nodeType);
+                ramData.push(node.usedRAM);
+                cpuLabels.push(node.nodeType);
+                cpuData.push(node.cpuUsagePercent);
+            });
+
+            var ramCtx = document.getElementById('ramChart').getContext('2d');
+            if (window.ramChartInstance) {
+                window.ramChartInstance.destroy();
+            }
+            window.ramChartInstance = new Chart(ramCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ramLabels,
+                    datasets: [{
+                        data: ramData,
+                        backgroundColor: ['#36A2EB', '#FF6384', '#FFCE56', '#4BC0C0'],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+
+            var cpuCtx = document.getElementById('cpuChart').getContext('2d');
+            if (window.cpuChartInstance) {
+                window.cpuChartInstance.destroy();
+            }
+            window.cpuChartInstance = new Chart(cpuCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: cpuLabels,
+                    datasets: [{
+                        data: cpuData,
+                        backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0'],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        function updateTable(nodes) {
+            var tbody = $('#nodeTableBody');
+            tbody.empty();
+            nodes.forEach(function (node) {
+                var statusBadge = node.status === 'Running' ? 'bg-success' : 'bg-danger';
+                var row = '<tr>' +
+                    '<td>' + node.nodeType + '</td>' +
+                    '<td><span class="badge ' + statusBadge + '">' + node.status + '</span></td>' +
+                    '<td>' + node.cpuUsagePercent + '</td>' +
+                    '<td>' + node.usedRAM + ' / ' + node.totalRAM + '</td>' +
+                    '<td>' + node.processCount + '</td>' +
+                    '<td>' + node.bandwidthInUse + '</td>' +
+                    '<td>' + node.activeConnections + '</td>' +
+                    '<td>' + new Date(node.lastHeartbeat).toLocaleString('vi-VN') + '</td>' +
+                    '</tr>';
+                tbody.append(row);
+            });
+        }
+
+        function updateStats() {
+            $.get('@Url.Action("GetDashboardStats", "Dashboard")', function (data) {
+                $('#onlineNodesCount').text(data.onlineNodes);
+                $('#totalPoliciesCount').text(data.totalPolicies);
+                $('#todayEventsCount').text(data.todayEvents);
+                $('#offlineNodesCount').text(data.offlineNodes);
+            });
+        }
+    </script>
+}

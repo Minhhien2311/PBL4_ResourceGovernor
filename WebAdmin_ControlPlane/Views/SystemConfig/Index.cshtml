@@ -1,0 +1,76 @@
+﻿@model WebAdmin_ControlPlane.Models.SystemConfig
+
+@{
+    ViewData["Title"] = "Cấu hình hệ thống";
+}
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card card-primary">
+            <div class="card-header">
+                <h3 class="card-title">Thông số kết nối</h3>
+            </div>
+            <form asp-action="Edit" method="post">
+                <div class="card-body">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                    <input type="hidden" asp-for="Id" />
+
+                    <div class="form-group">
+                        <label asp-for="AuthToken" class="control-label"></label>
+                        <input asp-for="AuthToken" class="form-control" />
+                        <span asp-validation-for="AuthToken" class="text-danger"></span>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label asp-for="OSAgentIP" class="control-label"></label>
+                                <input asp-for="OSAgentIP" class="form-control" />
+                                <span asp-validation-for="OSAgentIP" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label asp-for="OSAgentPort" class="control-label"></label>
+                                <input asp-for="OSAgentPort" class="form-control" />
+                                <span asp-validation-for="OSAgentPort" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label asp-for="ProxyIP" class="control-label"></label>
+                                <input asp-for="ProxyIP" class="form-control" />
+                                <span asp-validation-for="ProxyIP" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label asp-for="ProxyPort" class="control-label"></label>
+                                <input asp-for="ProxyPort" class="form-control" />
+                                <span asp-validation-for="ProxyPort" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label asp-for="HeartbeatIntervalSeconds" class="control-label"></label>
+                        <input asp-for="HeartbeatIntervalSeconds" class="form-control" />
+                        <span asp-validation-for="HeartbeatIntervalSeconds" class="text-danger"></span>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button type="submit" class="btn btn-primary">Lưu</button>
+                    <a asp-controller="Dashboard" asp-action="Index" class="btn btn-secondary">Quay lại</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

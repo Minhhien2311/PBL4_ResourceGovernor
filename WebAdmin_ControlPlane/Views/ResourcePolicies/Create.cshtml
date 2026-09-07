@@ -1,0 +1,140 @@
+﻿@model WebAdmin_ControlPlane.Models.ResourcePolicy
+
+@{
+    ViewData["Title"] = "Tạo mới Chính sách";
+}
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card card-primary">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="bi bi-plus-circle me-2"></i> Thông tin chính sách
+                </h3>
+            </div>
+            <form asp-action="Create">
+                <div class="card-body">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                    <div class="form-group">
+                        <label asp-for="Type" class="control-label"></label>
+                        <select asp-for="Type" class="form-control" id="policyType">
+                            <option value="1">OS Resource (RAM)</option>
+                            <option value="2">Network QoS (Bandwidth)</option>
+                        </select>
+                        <span asp-validation-for="Type" class="text-danger"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input asp-for="IsActive" class="form-check-input" type="checkbox" />
+                            <label class="form-check-label" asp-for="IsActive">Kích hoạt</label>
+                        </div>
+                    </div>
+
+                    <div id="osFields">
+                        <div class="form-group">
+                            <label for="TargetProcess" class="control-label">Chọn tiến trình</label>
+                            <select id="TargetProcess" name="TargetProcess" class="form-control">
+                                <option value="">-- Chọn tiến trình --</option>
+                            </select>
+                            <span asp-validation-for="TargetProcess" class="text-danger"></span>
+                        </div>
+                        <div class="form-group">
+                            <label asp-for="MaxRamMB" class="control-label"></label>
+                            <input asp-for="MaxRamMB" class="form-control" />
+                            <span asp-validation-for="MaxRamMB" class="text-danger"></span>
+                        </div>
+                        <div class="form-group">
+                            <label asp-for="OsAction" class="control-label"></label>
+                            <select asp-for="OsAction" class="form-control">
+                                <option value="Kill">Kill</option>
+                                <option value="Notify">Notify</option>
+                            </select>
+                            <span asp-validation-for="OsAction" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <div id="networkFields" style="display:none;">
+                        <div class="form-group">
+                            <label asp-for="TargetPort" class="control-label"></label>
+                            <input asp-for="TargetPort" class="form-control" />
+                            <span asp-validation-for="TargetPort" class="text-danger"></span>
+                        </div>
+                        <div class="form-group">
+                            <label asp-for="MaxBandwidthKbps" class="control-label"></label>
+                            <input asp-for="MaxBandwidthKbps" class="form-control" />
+                            <span asp-validation-for="MaxBandwidthKbps" class="text-danger"></span>
+                        </div>
+                        <div class="form-group">
+                            <label asp-for="ApplyToIp" class="control-label"></label>
+                            <input asp-for="ApplyToIp" class="form-control" value="All" />
+                            <span asp-validation-for="ApplyToIp" class="text-danger"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-1"></i> Lưu và áp dụng
+                    </button>
+                    <a asp-action="Index" class="btn btn-secondary">
+                        <i class="bi bi-arrow-left me-1"></i> Quay lại
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+    <script>
+        function toggleFields() {
+            var type = $('#policyType').val();
+            if (type == '1') {
+                $('#osFields').show();
+                $('#networkFields').hide();
+            } else {
+                $('#osFields').hide();
+                $('#networkFields').show();
+            }
+        }
+
+        function loadProcesses() {
+            var type = $('#policyType').val();
+            if (type == '1') {
+                $.get('@Url.Action("GetProcessList", "ResourcePolicies")', function (data) {
+                    var dropdown = $('#TargetProcess');
+                    dropdown.empty();
+                    dropdown.append('<option value="">-- Chọn tiến trình --</option>');
+                    $.each(data, function (index, proc) {
+                        dropdown.append('<option value="' + proc.Name + '">' + proc.Name + ' (RAM: ' + proc.RamMB + ' MB)</option>');
+                    });
+                });
+            }
+        }
+
+        $(document).ready(function () {
+            toggleFields();
+            loadProcesses();
+            $('#policyType').change(function () {
+                toggleFields();
+                loadProcesses();
+            });
+        });
+                $(document).ready(function () {
+            $('[data-bs-toggle="tooltip"]').tooltip();
+
+            var successMsg = '@TempData["Success"]';
+            if (successMsg) {
+                toastr.success(successMsg);
+            }
+            var errorMsg = '@TempData["Error"]';
+            if (errorMsg) {
+                toastr.error(errorMsg);
+            }
+        });
+    </script>
+}
