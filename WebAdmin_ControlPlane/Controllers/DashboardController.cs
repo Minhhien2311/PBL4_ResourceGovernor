@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using WebAdmin_ControlPlane.Data;
 using WebAdmin_ControlPlane.Models;
 
@@ -18,10 +19,7 @@ namespace WebAdmin_ControlPlane.Controllers
 
         public async Task<IActionResult> Index()
         {
-            // Lấy trạng thái node và cập nhật offline nếu heartbeat quá hạn
             var nodes = await GetNodesWithUpdatedStatusAsync();
-
-            // Thống kê
             ViewBag.TotalPolicies = await _context.ResourcePolicies.CountAsync();
             ViewBag.OnlineNodes = nodes.Count(n => n.Status == "Running");
             ViewBag.TodayEvents = await _context.EventLogs
@@ -35,35 +33,13 @@ namespace WebAdmin_ControlPlane.Controllers
         public async Task<IActionResult> GetNodeStatus()
         {
             var nodes = await GetNodesWithUpdatedStatusAsync();
-            return Json(nodes);
-        }
-
-        private async Task<List<NodeStatus>> GetNodesWithUpdatedStatusAsync()
-        {
-            var threshold = TimeSpan.FromSeconds(15); // ngưỡng coi là offline
-            var now = DateTime.Now;
-            var nodes = await _context.NodeStatuses.ToListAsync();
-
-            foreach (var node in nodes)
-            {
-                if (now - node.LastHeartbeat > threshold)
-                {
-                    node.Status = "Offline"; // cập nhật trong memory, không lưu DB ngay
-                }
-                else
-                {
-                    node.Status = "Running";
-                }
-            }
-
-            return nodes;
+            return Json(nodes, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
         }
 
         [HttpGet]
         public async Task<IActionResult> GetDashboardStats()
         {
-            // Cập nhật trạng thái offline cho node trước khi thống kê
-            var nodes = await GetNodesWithUpdatedStatusAsync(); // Dùng lại hàm đã có
+            var nodes = await GetNodesWithUpdatedStatusAsync();
 
             var stats = new
             {
@@ -75,7 +51,21 @@ namespace WebAdmin_ControlPlane.Controllers
                 offlineNodes = nodes.Count(n => n.Status != "Running")
             };
 
-            return Json(stats);
+            return Json(stats, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        }
+
+        private async Task<List<NodeStatus>> GetNodesWithUpdatedStatusAsync()
+        {
+            var threshold = TimeSpan.FromSeconds(15);
+            var now = DateTime.Now;
+            var nodes = await _context.NodeStatuses.ToListAsync();
+
+            foreach (var node in nodes)
+            {
+                node.Status = (now - node.LastHeartbeat > threshold) ? "Offline" : "Running";
+            }
+
+            return nodes;
         }
     }
 }
