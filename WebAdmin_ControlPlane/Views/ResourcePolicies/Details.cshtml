@@ -1,0 +1,63 @@
+﻿@model WebAdmin_ControlPlane.Models.ResourcePolicy
+
+@{
+    ViewData["Title"] = "Chi tiết Chính sách";
+}
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="bi bi-eye me-2"></i> Thông tin chính sách
+                </h3>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-4">Loại</dt>
+                    <dd class="col-sm-8">
+                        @if (Model.Type == WebAdmin_ControlPlane.Models.PolicyType.OsResource)
+                        {
+                            <span class="badge bg-primary">OS Resource</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-info">Network QoS</span>
+                        }
+                    </dd>
+                    <dt class="col-sm-4">Tiến trình</dt>
+                    <dd class="col-sm-8">@Model.TargetProcess</dd>
+                    <dt class="col-sm-4">Giới hạn RAM (MB)</dt>
+                    <dd class="col-sm-8">@Model.MaxRamMB</dd>
+                    <dt class="col-sm-4">Hành động</dt>
+                    <dd class="col-sm-8">@Model.OsAction</dd>
+                    <dt class="col-sm-4">Cổng</dt>
+                    <dd class="col-sm-8">@Model.TargetPort</dd>
+                    <dt class="col-sm-4">Băng thông (Kbps)</dt>
+                    <dd class="col-sm-8">@Model.MaxBandwidthKbps</dd>
+                    <dt class="col-sm-4">Áp dụng cho IP</dt>
+                    <dd class="col-sm-8">@Model.ApplyToIp</dd>
+                    <dt class="col-sm-4">Trạng thái</dt>
+                    <dd class="col-sm-8">
+                        @if (Model.IsActive)
+                        {
+                            <span class="badge bg-success">Active</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Inactive</span>
+                        }
+                    </dd>
+                </dl>
+            </div>
+            <div class="card-footer">
+                <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-warning">
+                    <i class="bi bi-pencil me-1"></i> Sửa
+                </a>
+                <a asp-action="Index" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left me-1"></i> Quay lại
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
