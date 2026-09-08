@@ -30,6 +30,7 @@ Release/
 /OS_Agent_Node/Release/
 /Network_Proxy_Node/Debug/
 /Network_Proxy_Node/Release/
+out/
 
 # 3. Thư mục rác của C# & ASP.NET Core (Dành cho Web Admin)
 bin/
