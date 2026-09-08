@@ -63,10 +63,10 @@ double GetProcessRAMMB(DWORD pid) {
 void MonitorLoop() {
 	
     while (true) {
-        HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
         if (hSnapshot == INVALID_HANDLE_VALUE) {
             std::cerr << "Khong tao duoc snapshot!" << std::endl;
-            continue ;
+            Sleep(5000);
+            continue;
         }
 
         // Struct này sẽ chứa thông tin của TỪNG process khi ta duyệt qua
@@ -88,21 +88,24 @@ void MonitorLoop() {
                 else {
                     std::wcout << L" - Ram: Khong the lay thong tin RAM" << std::endl;
                 }
+                Policy policy;
+                bool hasPolicy = false;
                 {
                     std::lock_guard<std::mutex> lock(PolicyMutex);
                     auto it = policyStore.find(entry.szExeFile);
                     if (it != policyStore.end()) {
-                        // tìm thấy policy cho process này
-                        if (ramMB > it->second.MaxRAMMB) {
-                            std::wcout << L"   >>> VUOT NGUONG!" << std::endl;
-                            if (it->second.Action == L"Kill") {
-                                HANDLE hKill = OpenProcess(PROCESS_TERMINATE, FALSE, entry.th32ProcessID);
-                                if (hKill != NULL) {
-                                    TerminateProcess(hKill, 1);
-                                    WriteLog("Da kill 1 process vi vuot nguong RAM");
-                                    CloseHandle(hKill);
-                                }
-                            }
+                        policy = it->second;
+                        hasPolicy = true;
+                    }
+                }
+                if (hasPolicy && ramMB > policy.MaxRAMMB) {
+                    std::wcout << L"   >>> VUOT NGUONG!" << std::endl;
+                    if (policy.Action == L"Kill") {
+                        HANDLE hKill = OpenProcess(PROCESS_TERMINATE, FALSE, entry.th32ProcessID);
+                        if (hKill != NULL) {
+                            TerminateProcess(hKill, 1);
+                            WriteLog("Da kill 1 process vi vuot nguong RAM");
+                            CloseHandle(hKill);
                         }
                     }
                 }
@@ -156,8 +159,15 @@ void TcpServerLoop() {
             std::cerr << "Accept that bai!" << std::endl;
             continue;
         }
-        char buffer[4096];
-        int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+        char buffer[4097];
+        int bytesReceived = recv(clientSocket, buffer, 4096, 0);
+        if (bytesReceived <= 0) {
+            if (bytesReceived == SOCKET_ERROR) {
+                WriteLog("Recv that bai tu client");
+            }
+            closesocket(clientSocket);
+            continue;
+        }
         buffer[bytesReceived] = '\0';
         try {
             std::string jsonText(buffer);
@@ -192,16 +202,31 @@ void HeartbeatLoop() {
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
         WINHTTP_NO_PROXY_NAME,
         WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!hSession) {
+        WriteLog("WinHttpOpen that bai");
+        return;
+    }
     while (true) {
         HINTERNET hConnect = WinHttpConnect(hSession, L"localhost", 5000, 0);
+        if (!hConnect) {
+            WriteLog("WinHttpConnect that bai");
+            Sleep(5000);
+            continue;
+        }
         HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", L"/api/telemetry",
             NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
+        if (!hRequest) {
+            WriteLog("WinHttpOpenRequest that bai");
+            WinHttpCloseHandle(hConnect);
+            Sleep(5000);
+            continue;
+        }
         std::string jsonBody = R"({"NodeType": "OSAgent", "Status": "Running", "CPUUsagePercent": 10, "TotalRAM": 16384, "UsedRAM": 4096, "ProcessCount": 100})";
         LPCWSTR headers = L"Content-Type: application/json";
         BOOL sendResult = WinHttpSendRequest(hRequest,
             headers, -1,
-            (LPVOID)jsonBody.c_str(), jsonBody.length(),
-            jsonBody.length(), 0);
+            (LPVOID)jsonBody.c_str(), (DWORD)jsonBody.length(),
+            (DWORD)jsonBody.length(), 0);
         if (sendResult) {
             std::cout << "Da gui heartbeat" << std::endl;
         }
@@ -212,7 +237,6 @@ void HeartbeatLoop() {
         WinHttpCloseHandle(hConnect);
 		Sleep(5000); // Gửi heartbeat mỗi 5 giây
     }
-	WinHttpCloseHandle(hSession);
 }
 
 int main() {
