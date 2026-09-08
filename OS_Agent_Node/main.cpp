@@ -61,25 +61,22 @@ double GetProcessRAMMB(DWORD pid) {
 }
 
 void MonitorLoop() {
-	
     while (true) {
+        // Tạo snapshot mới ở mỗi vòng lặp để quét tiến trình cập nhật
+        HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
         if (hSnapshot == INVALID_HANDLE_VALUE) {
             std::cerr << "Khong tao duoc snapshot!" << std::endl;
             Sleep(5000);
             continue;
         }
 
-        // Struct này sẽ chứa thông tin của TỪNG process khi ta duyệt qua
         PROCESSENTRY32 entry;
-        entry.dwSize = sizeof(PROCESSENTRY32);  // BẮT BUỘC phải set dòng này trước khi gọi Process32First
+        entry.dwSize = sizeof(PROCESSENTRY32);
 
-        // Bước 2: Lấy process đầu tiên5
         if (Process32First(hSnapshot, &entry)) {
-            // Bước 3: Lặp qua các process còn lại
             do {
                 double ramMB = GetProcessRAMMB(entry.th32ProcessID);
-                // entry.szExeFile = tên file exe (VD: chrome.exe)
-                // entry.th32ProcessID = PID của process đó
+
                 std::wcout << L"PID: " << entry.th32ProcessID
                     << L" - Ten: " << entry.szExeFile;
                 if (ramMB >= 0) {
@@ -88,6 +85,7 @@ void MonitorLoop() {
                 else {
                     std::wcout << L" - Ram: Khong the lay thong tin RAM" << std::endl;
                 }
+
                 Policy policy;
                 bool hasPolicy = false;
                 {
@@ -99,7 +97,7 @@ void MonitorLoop() {
                     }
                 }
                 if (hasPolicy && ramMB > policy.MaxRAMMB) {
-                    std::wcout << L"   >>> VUOT NGUONG!" << std::endl;
+                    std::wcout << L"    >>> VUOT NGUONG!" << std::endl;
                     if (policy.Action == L"Kill") {
                         HANDLE hKill = OpenProcess(PROCESS_TERMINATE, FALSE, entry.th32ProcessID);
                         if (hKill != NULL) {
@@ -112,9 +110,9 @@ void MonitorLoop() {
             } while (Process32Next(hSnapshot, &entry));
         }
 
-        // Bước 4: Đóng handle, giải phóng tài nguyên
+        // Đóng handle của snapshot hiện tại sau khi quét xong
         CloseHandle(hSnapshot);
-        Sleep(5000);
+        Sleep(5000); // Ngủ 5 giây trước khi quét lại
     }
 }
 
@@ -207,13 +205,13 @@ void HeartbeatLoop() {
         return;
     }
     while (true) {
-        HINTERNET hConnect = WinHttpConnect(hSession, L"localhost", 5000, 0);
+        HINTERNET hConnect = WinHttpConnect(hSession, L"10.85.188.7", 5247, 0);
         if (!hConnect) {
             WriteLog("WinHttpConnect that bai");
             Sleep(5000);
             continue;
         }
-        HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", L"/api/telemetry",
+        HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", L"/api/telemetry/heartbeat",
             NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
         if (!hRequest) {
             WriteLog("WinHttpOpenRequest that bai");
@@ -221,7 +219,14 @@ void HeartbeatLoop() {
             Sleep(5000);
             continue;
         }
-        std::string jsonBody = R"({"NodeType": "OSAgent", "Status": "Running", "CPUUsagePercent": 10, "TotalRAM": 16384, "UsedRAM": 4096, "ProcessCount": 100})";
+        std::string jsonBody = R"({
+            "NodeType": "OSAgent", 
+            "Status": "Running", 
+            "CPUUsagePercent": 15.5, 
+            "TotalRAM": 16384, 
+            "UsedRAM": 4096, 
+            "ProcessCount": 120
+        })";
         LPCWSTR headers = L"Content-Type: application/json";
         BOOL sendResult = WinHttpSendRequest(hRequest,
             headers, -1,
