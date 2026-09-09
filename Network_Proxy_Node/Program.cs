@@ -24,7 +24,7 @@ class Program
         var controlPlane = new ControlPlaneServer();
         _ = controlPlane.StartListeningAsync();
 
-        var dataPlaneProxy = new DataPlaneProxy(8080);
+        var dataPlaneProxy = new PolicyListener(8080);
         await dataPlaneProxy.StartAsync();
     }
 }
