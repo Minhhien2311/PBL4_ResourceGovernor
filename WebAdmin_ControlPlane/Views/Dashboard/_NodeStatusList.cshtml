@@ -1,0 +1,31 @@
+﻿@model IEnumerable<WebAdmin_ControlPlane.Models.NodeStatus>
+
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Loại Node</th>
+            <th>Trạng thái</th>
+            <th>CPU (%)</th>
+            <th>RAM (MB)</th>
+            <th>Processes</th>
+            <th>Bandwidth (Kbps)</th>
+            <th>Active Connections</th>
+            <th>Last Heartbeat</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var node in Model)
+        {
+            <tr>
+                <td>@node.NodeType</td>
+                <td>@node.Status</td>
+                <td>@node.CPUUsagePercent</td>
+                <td>@node.UsedRAM / @node.TotalRAM</td>
+                <td>@node.ProcessCount</td>
+                <td>@node.BandwidthInUse</td>
+                <td>@node.ActiveConnections</td>
+                <td>@node.LastHeartbeat.ToString("HH:mm:ss")</td>
+            </tr>
+        }
+    </tbody>
+</table>

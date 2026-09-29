@@ -1,0 +1,46 @@
+# ==========================
+# .gitignore cho PBL4 (C++, C#, ASP.NET Core)
+# ==========================
+
+# 1. Thư mục rác của Visual Studio & VS Code
+.vs/
+.vscode/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.db
+*.sqlite3
+
+# 2. Thư mục rác của C/C++ (Dành cho 2 file OS_Agent và Proxy)
+*.exe
+*.obj
+*.o
+*.pdb
+*.idb
+*.ilk
+*.pch
+*.lib
+*.exp
+x64/
+x86/
+Debug/
+Release/
+/OS_Agent_Node/Debug/
+/OS_Agent_Node/Release/
+/Network_Proxy_Node/Debug/
+/Network_Proxy_Node/Release/
+
+# 3. Thư mục rác của C# & ASP.NET Core (Dành cho Web Admin)
+bin/
+obj/
+/WebAdmin_ControlPlane/bin/
+/WebAdmin_ControlPlane/obj/
+
+# Bỏ qua các file cấu hình chứa mật khẩu database (nếu có)
+appsettings.Development.json
+secrets.json
+
+# 4. Rác của hệ điều hành
+.DS_Store
+Thumbs.db
