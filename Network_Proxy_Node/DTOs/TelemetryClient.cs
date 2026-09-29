@@ -7,8 +7,8 @@ using System.Threading.Tasks;
 public class TelemetryClient
 {
     private static readonly HttpClient _httpClient = new HttpClient();
-    private const string HeartbeatUrl = "http://localhost:5247/api/telemetry/heartbeat";
-    private const string LogUrl = "http://localhost:5247/api/telemetry/log";
+    private const string HeartbeatUrl = "http://localhost:5247/api/telemetry/heartbeat"; //
+    private const string LogUrl = "http://localhost:5247/api/telemetry/log";         // gửi heartbeat, gửi log/event từ proxy về web admin
 
     public void StartHeartbeat()
     {

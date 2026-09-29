@@ -25,6 +25,9 @@ public class ControlPlaneServer
         {
             TcpClient client = await listener.AcceptTcpClientAsync();
 
+            // Thêm dòng thông báo kết nối thành công ở đây
+            Console.WriteLine($"[Control] Web Admin da ket noi tu IP: {client.Client.RemoteEndPoint}");
+
             _ = Task.Run(() => HandleAdminCommandAsync(client));
         }
     }
