@@ -17,7 +17,7 @@ void chayHeartbeatLoop() {
     // Khởi tạo global cho curl (chỉ cần chạy 1 lần)
     curl_global_init(CURL_GLOBAL_ALL);
 
-    const std::string url = "http://10.85.188.7:5247/api/telemetry/heartbeat";
+    const std::string url = "http://172.20.10.2:5247/api/telemetry/heartbeat";
 
     while (true) {
         CURL* curl = curl_easy_init();

@@ -55,7 +55,7 @@ void chayTcpServer() {
 
     std::cout << "Server đang chạy và lắng nghe ở cổng " << PORT << "..." << std::endl;
 
-    // 4. Vòng lặp phục vụ các client
+// 4. Vòng lặp phục vụ các client
     while (true) {
         sockaddr_in clientAddr{};
         socklen_t clientLen = sizeof(clientAddr); 
@@ -66,31 +66,21 @@ void chayTcpServer() {
             continue;
         }
 
-        // Nhận dữ liệu từng phần cho tới khi gặp '\n'
-        std::string duLieu = "";
-        char buffer[1024];
-        while (duLieu.find('\n') == std::string::npos) {
-            memset(buffer, 0, sizeof(buffer));
-            ssize_t n = recv(clientFd, buffer, sizeof(buffer) - 1, 0);
+        // ==========================================
+        // SỬA CƠ CHẾ NHẬN TCP GIỐNG BẢN WINDOWS
+        // Đọc 1 lần, không chờ ký tự '\n'
+        // ==========================================
+        char buffer[4097];
+        memset(buffer, 0, sizeof(buffer));
+        ssize_t n = recv(clientFd, buffer, sizeof(buffer) - 1, 0);
 
-            if (n > 0) {
-                duLieu.append(buffer, n);
-            } else {
-                break;
-            }
-        }
-
-        // Cắt bỏ ký tự '\n' ở đuôi trước khi parse
-        size_t pos = duLieu.find('\n');
-        if (pos == std::string::npos) {
-            // Không có '\n' -> Client ngắt ngang hông hoặc gói tin không đúng chuẩn giao thức
-            std::cout << "[LỖI] Dữ liệu không hoàn chỉnh (thiếu ký tự \\n)!" << std::endl;
+        if (n <= 0) {
+            // Client ngắt kết nối hoặc lỗi mạng
             close(clientFd);
-            continue; // Bỏ qua, quay lại vòng lặp chờ client tiếp theo
+            continue;
         }
-        std::string jsonStr = duLieu.substr(0, pos);
 
-
+        std::string jsonStr(buffer);
         std::cout << "Dữ liệu thô nhận được: " << jsonStr << std::endl;
 
         json phanHoi;
