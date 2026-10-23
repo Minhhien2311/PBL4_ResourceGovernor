@@ -3,9 +3,15 @@
 
 #include <mutex>
 #include <string>
+#include <vector>
+
+struct LuatRieng {
+    long uid;                  // -1 = ap dung cho moi user
+    std::string tenTienTrinh;
+    long maxKb;
+};
 
 extern std::mutex khoa;
-extern std::string tenDangQuanLy;
-extern long soKbMaxDungChung;
+extern std::vector<LuatRieng> danhSachLuat;
 
 #endif

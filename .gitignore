@@ -43,4 +43,11 @@ secrets.json
 
 # 4. Rác của hệ điều hành
 .DS_Store
-Thumbs.db
+Thumbs.dbresource-governor
+resource_governor
+report_job
+eat_ram
+*.o
+*.log
+agent.conf
+resource-governor

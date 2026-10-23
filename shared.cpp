@@ -1,5 +1,4 @@
 #include "shared.h"
 
 std::mutex khoa;
-std::string tenDangQuanLy = "eat_ram";
-long soKbMaxDungChung = 100000;
+std::vector<LuatRieng> danhSachLuat = { {-1, "eat_ram", 100000} };
