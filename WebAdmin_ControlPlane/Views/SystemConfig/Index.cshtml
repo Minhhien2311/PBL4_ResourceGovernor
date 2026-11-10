@@ -1,76 +1,85 @@
-﻿@model WebAdmin_ControlPlane.Models.SystemConfig
-
+﻿@model IEnumerable<WebAdmin_ControlPlane.Models.ServerNode>
 @{
-    ViewData["Title"] = "Cấu hình hệ thống";
+    ViewData["Title"] = "Quản lý Server";
 }
 
+<!-- HIỂN THỊ THÔNG BÁO THÀNH CÔNG -->
 @if (TempData["Success"] != null)
 {
-    <div class="alert alert-success">@TempData["Success"]</div>
+    <div class="alert alert-success alert-dismissible fade show">
+        <i class="bi bi-check-circle-fill me-2"></i> @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
 }
 
 <div class="row">
-    <div class="col-md-8 mx-auto">
-        <div class="card card-primary">
-            <div class="card-header">
-                <h3 class="card-title">Thông số kết nối</h3>
-            </div>
-            <form asp-action="Edit" method="post">
+    <!-- CỘT TRÁI: FORM THÊM MỚI -->
+    <div class="col-md-5">
+        <div class="card card-success">
+            <div class="card-header"><h3 class="card-title">Thêm Server Mới</h3></div>
+            <form asp-action="AddServer" method="post">
+                <!-- HIỂN THỊ LỖI VALIDATION TẠI ĐÂY -->
+                <div asp-validation-summary="ModelOnly" class="text-danger px-3 pt-2"></div>
+
                 <div class="card-body">
-                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-                    <input type="hidden" asp-for="Id" />
-
-                    <div class="form-group">
-                        <label asp-for="AuthToken" class="control-label"></label>
-                        <input asp-for="AuthToken" class="form-control" />
-                        <span asp-validation-for="AuthToken" class="text-danger"></span>
+                    <div class="form-group mb-2">
+                        <label>Node ID (VD: server-a)</label>
+                        <input name="NodeId" class="form-control" required />
+                        <span class="text-danger small">@Html.ValidationMessage("NodeId")</span>
                     </div>
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label asp-for="OSAgentIP" class="control-label"></label>
-                                <input asp-for="OSAgentIP" class="form-control" />
-                                <span asp-validation-for="OSAgentIP" class="text-danger"></span>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label asp-for="OSAgentPort" class="control-label"></label>
-                                <input asp-for="OSAgentPort" class="form-control" />
-                                <span asp-validation-for="OSAgentPort" class="text-danger"></span>
-                            </div>
-                        </div>
+                    <div class="form-group mb-2">
+                        <label>IP Address</label>
+                        <input name="IpAddress" class="form-control" required />
                     </div>
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label asp-for="ProxyIP" class="control-label"></label>
-                                <input asp-for="ProxyIP" class="form-control" />
-                                <span asp-validation-for="ProxyIP" class="text-danger"></span>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label asp-for="ProxyPort" class="control-label"></label>
-                                <input asp-for="ProxyPort" class="form-control" />
-                                <span asp-validation-for="ProxyPort" class="text-danger"></span>
-                            </div>
-                        </div>
+                    <div class="form-group mb-2">
+                        <label>Port (Mặc định 9001)</label>
+                        <input name="Port" type="number" class="form-control" value="9001" required />
                     </div>
-
-                    <div class="form-group">
-                        <label asp-for="HeartbeatIntervalSeconds" class="control-label"></label>
-                        <input asp-for="HeartbeatIntervalSeconds" class="form-control" />
-                        <span asp-validation-for="HeartbeatIntervalSeconds" class="text-danger"></span>
+                    <div class="form-group mb-2">
+                        <label>Auth Token</label>
+                        <input name="AuthToken" class="form-control" value="abc123" required />
                     </div>
                 </div>
                 <div class="card-footer">
-                    <button type="submit" class="btn btn-primary">Lưu</button>
-                    <a asp-controller="Dashboard" asp-action="Index" class="btn btn-secondary">Quay lại</a>
+                    <button type="submit" class="btn btn-success">Thêm Server</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- CỘT PHẢI: BẢNG DANH SÁCH SERVER -->
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">Danh sách Server</h3></div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Node ID</th>
+                            <th>IP</th>
+                            <th>Port</th>
+                            <th>Token</th>
+                            <th>Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in Model)
+                        {
+                            <tr>
+                                <td><strong>@s.NodeId</strong></td>
+                                <td>@s.IpAddress</td>
+                                <td>@s.Port</td>
+                                <td>@s.AuthToken</td>
+                                <td>
+                                    <a asp-action="EditServer" asp-route-id="@s.NodeId" class="btn btn-warning btn-sm">
+                                        <i class="bi bi-pencil"></i> Sửa
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>

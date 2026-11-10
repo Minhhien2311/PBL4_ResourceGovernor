@@ -6,23 +6,19 @@ namespace WebAdmin_ControlPlane.Models
     public class NodeStatus
     {
         [Key]
-        public int Id { get; set; }
-
-        [Required]
-        public string NodeType { get; set; } = ""; // "OSAgent" hoặc "NetworkProxy"
-
-        [Required]
-        public string Status { get; set; } = ""; // "Running", "Stopped", "Error"
-
+        public string NodeId { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
         public double CPUUsagePercent { get; set; }
-        public double TotalRAM { get; set; }
-        public double UsedRAM { get; set; }
-        public int ProcessCount { get; set; }
+        public long TotalRAM { get; set; }
+        public long UsedRAM { get; set; }
+        public DateTime LastHeartbeat { get; set; } = DateTime.Now;
+    }
 
-        // Dành cho Network Proxy
-        public double BandwidthInUse { get; set; }
-        public int ActiveConnections { get; set; }
-
-        public DateTime LastHeartbeat { get; set; }
+    public class ProcessInfo
+    {
+        public string Name { get; set; } = string.Empty;
+        public int Pid { get; set; }
+        public string User { get; set; } = string.Empty;
+        public double RamMB { get; set; }
     }
 }

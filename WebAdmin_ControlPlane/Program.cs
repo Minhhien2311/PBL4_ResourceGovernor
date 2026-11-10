@@ -8,10 +8,22 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Add services to the container.
 builder.Services.AddControllersWithViews();
 
-// Đăng ký Authentication
+// --- ĐĂNG KÝ CÁC SERVICE ---
+// 1. Service giao tiếp với Controller (nếu vẫn dùng cho Dashboard)
+builder.Services.AddSingleton<ControllerService>();
+
+// 2. Service giao tiếp trực tiếp với Agent (Port 9001)
+builder.Services.AddSingleton<AgentTcpService>();
+
+// 3. Background Service chạy ngầm tự động đồng bộ luật xuống Agent
+builder.Services.AddHostedService<SyncPolicyBackgroundService>();
+
+builder.Services.AddSingleton<TelemetryCacheService>();
+builder.Services.AddHostedService<AgentPollingService>();
+
+// --- CẤU HÌNH ĐĂNG NHẬP ---
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -19,12 +31,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.LogoutPath = "/Account/Logout";
         options.AccessDeniedPath = "/Account/AccessDenied";
     });
-
 builder.Services.AddAuthorization();
-
-// Đăng ký TcpCommandService
-builder.Services.AddSingleton<TcpCommandService>();
-builder.Services.AddHostedService(provider => provider.GetRequiredService<TcpCommandService>());
 
 var app = builder.Build();
 
@@ -38,11 +45,10 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseRouting();
 
-app.UseAuthentication(); // Thêm dòng này
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapStaticAssets();
-
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}")

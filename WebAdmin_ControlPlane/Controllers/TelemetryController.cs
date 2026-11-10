@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using WebAdmin_ControlPlane.Data;
 using WebAdmin_ControlPlane.Models;
+using WebAdmin_ControlPlane.Services;
 
 namespace WebAdmin_ControlPlane.Controllers
 {
@@ -8,53 +8,23 @@ namespace WebAdmin_ControlPlane.Controllers
     [ApiController]
     public class TelemetryController : ControllerBase
     {
-        private readonly AppDbContext _context;
+        private readonly TelemetryCacheService _cache;
 
-        public TelemetryController(AppDbContext context)
+        public TelemetryController(TelemetryCacheService cache)
         {
-            _context = context;
+            _cache = cache;
         }
 
         [HttpPost("heartbeat")]
-        public async Task<IActionResult> ReceiveHeartbeat([FromBody] NodeStatus status)
+        public IActionResult ReceiveHeartbeat([FromBody] HeartbeatPayload payload)
         {
-            if (status == null)
+            if (payload == null || string.IsNullOrEmpty(payload.NodeId))
                 return BadRequest();
 
-            // Tìm node theo NodeType (nếu có) hoặc thêm mới
-            var existing = _context.NodeStatuses
-                .FirstOrDefault(n => n.NodeType == status.NodeType);
-
-            if (existing != null)
-            {
-                existing.Status = status.Status;
-                existing.CPUUsagePercent = status.CPUUsagePercent;
-                existing.TotalRAM = status.TotalRAM;
-                existing.UsedRAM = status.UsedRAM;
-                existing.ProcessCount = status.ProcessCount;
-                existing.BandwidthInUse = status.BandwidthInUse;
-                existing.ActiveConnections = status.ActiveConnections;
-                existing.LastHeartbeat = DateTime.Now;
-            }
-            else
-            {
-                status.LastHeartbeat = DateTime.Now;
-                _context.NodeStatuses.Add(status);
-            }
-
-            await _context.SaveChangesAsync();
-            return Ok(new { status = "ok" });
-        }
-
-        [HttpPost("log")]
-        public async Task<IActionResult> ReceiveLog([FromBody] EventLog log)
-        {
-            if (log == null)
-                return BadRequest();
-
-            log.Timestamp = DateTime.Now;
-            _context.EventLogs.Add(log);
-            await _context.SaveChangesAsync();
+            // Lưu trạng thái, process và thời gian
+            _cache.LatestHeartbeats[payload.NodeId] = payload;
+            _cache.NodeProcesses[payload.NodeId] = payload.Processes;
+            _cache.LastHeartbeatTimes[payload.NodeId] = DateTime.Now; // Lưu thời điểm
 
             return Ok(new { status = "ok" });
         }
