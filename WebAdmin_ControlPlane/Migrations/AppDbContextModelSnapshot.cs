@@ -30,14 +30,19 @@ namespace WebAdmin_ControlPlane.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("EventType")
+                    b.Property<string>("Action")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Message")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("NodeType")
+                    b.Property<string>("NodeId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TargetProcess")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
@@ -49,48 +54,6 @@ namespace WebAdmin_ControlPlane.Migrations
                     b.ToTable("EventLogs");
                 });
 
-            modelBuilder.Entity("WebAdmin_ControlPlane.Models.NodeStatus", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("ActiveConnections")
-                        .HasColumnType("int");
-
-                    b.Property<double>("BandwidthInUse")
-                        .HasColumnType("float");
-
-                    b.Property<double>("CPUUsagePercent")
-                        .HasColumnType("float");
-
-                    b.Property<DateTime>("LastHeartbeat")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("NodeType")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("ProcessCount")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<double>("TotalRAM")
-                        .HasColumnType("float");
-
-                    b.Property<double>("UsedRAM")
-                        .HasColumnType("float");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("NodeStatuses");
-                });
-
             modelBuilder.Entity("WebAdmin_ControlPlane.Models.ResourcePolicy", b =>
                 {
                     b.Property<int>("Id")
@@ -99,33 +62,45 @@ namespace WebAdmin_ControlPlane.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("ApplyToIp")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<int?>("MaxBandwidthKbps")
-                        .HasColumnType("int");
-
                     b.Property<int?>("MaxRamMB")
                         .HasColumnType("int");
+
+                    b.Property<string>("NodeId")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("OsAction")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("TargetPort")
-                        .HasColumnType("int");
-
                     b.Property<string>("TargetProcess")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("Type")
-                        .HasColumnType("int");
+                    b.Property<string>("TargetUser")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
                     b.ToTable("ResourcePolicies");
+                });
+
+            modelBuilder.Entity("WebAdmin_ControlPlane.Models.ServerNode", b =>
+                {
+                    b.Property<string>("NodeId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("AuthToken")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("IpAddress")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Port")
+                        .HasColumnType("int");
+
+                    b.HasKey("NodeId");
+
+                    b.ToTable("ServerNodes");
                 });
 
             modelBuilder.Entity("WebAdmin_ControlPlane.Models.SystemConfig", b =>
@@ -136,26 +111,27 @@ namespace WebAdmin_ControlPlane.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("AuthToken")
+                    b.Property<string>("AgentIP")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("HeartbeatIntervalSeconds")
+                    b.Property<int>("AgentPort")
                         .HasColumnType("int");
 
-                    b.Property<string>("OSAgentIP")
+                    b.Property<string>("AgentToken")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("OSAgentPort")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ProxyIP")
+                    b.Property<string>("ControllerIP")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("ProxyPort")
+                    b.Property<int>("ControllerPort")
                         .HasColumnType("int");
+
+                    b.Property<string>("ControllerToken")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 

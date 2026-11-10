@@ -15,12 +15,12 @@ namespace WebAdmin_ControlPlane.Controllers
             _context = context;
         }
 
-        // GET: EventLogs
         public async Task<IActionResult> Index()
         {
+            // Lấy 200 bản ghi mới nhất
             var logs = await _context.EventLogs
                 .OrderByDescending(l => l.Timestamp)
-                .Take(200) // Giới hạn 200 bản ghi gần nhất để tránh quá tải
+                .Take(200)
                 .ToListAsync();
             return View(logs);
         }

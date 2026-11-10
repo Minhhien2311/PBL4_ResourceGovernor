@@ -8,14 +8,18 @@ namespace WebAdmin_ControlPlane.Models
         [Key]
         public int Id { get; set; }
 
-        [Required]
-        public string NodeType { get; set; } = ""; // "OSAgent" hoặc "NetworkProxy"
+        [Display(Name = "Server Áp Dụng")]
+        public string NodeId { get; set; } = string.Empty;
 
-        [Required]
-        public string EventType { get; set; } = ""; // "PolicyApplied", "ProcessKilled", "Error", ...
+        [Display(Name = "Hành động")]
+        public string Action { get; set; } = string.Empty; // VD: Tạo mới, Cập nhật, Xóa
 
-        public string? Message { get; set; }
+        [Display(Name = "Tiến trình")]
+        public string TargetProcess { get; set; } = string.Empty;
 
-        public DateTime Timestamp { get; set; }
+        [Display(Name = "Chi tiết")]
+        public string Message { get; set; } = string.Empty; // Ghi rõ thành công hay thất bại
+
+        public DateTime Timestamp { get; set; } = DateTime.Now;
     }
 }

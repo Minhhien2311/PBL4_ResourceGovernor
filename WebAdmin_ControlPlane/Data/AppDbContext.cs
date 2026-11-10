@@ -8,9 +8,9 @@ namespace WebAdmin_ControlPlane.Data
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
         public DbSet<ResourcePolicy> ResourcePolicies { get; set; }
-        public DbSet<NodeStatus> NodeStatuses { get; set; }
-        public DbSet<EventLog> EventLogs { get; set; }
         public DbSet<SystemConfig> SystemConfigs { get; set; }
+        public DbSet<ServerNode> ServerNodes { get; set; }
 
+        public DbSet<EventLog> EventLogs { get; set; }
     }
 }
