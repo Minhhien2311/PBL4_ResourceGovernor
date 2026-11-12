@@ -51,3 +51,12 @@ eat_ram
 *.log
 agent.conf
 resource-governor
+doi_soat_job
+kiem_toan_job
+cpu_job
+cpu_job
+doi_soat_job
+kiem_toan_job
+resource_governor
+report_job
+agent.log

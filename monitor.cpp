@@ -417,6 +417,8 @@ void chayMonitorLoop() {
 }
 
 */
+
+/*
 #include "monitor.h"
 #include "shared.h"
 #include "logger.h"
@@ -436,7 +438,7 @@ void chayMonitorLoop() {
 #include <unordered_set>
 #include <vector>
 #include "job.h"
-const int TTL_GIAY = 20;                 // thoi gian toi thieu bi dung truoc khi duoc xet tha
+const int TTL_GIAY = 60;                 // thoi gian toi thieu bi dung truoc khi duoc xet tha
 const double MOC_THA_PHAN_TRAM = 32;     // RAM he thong trong >= muc nay thi coi la thoang
 
 static double docPhanTramRamTrong() {
@@ -585,6 +587,249 @@ void chayMonitorLoop() {
             else ++it;
         }
         
+        thuHoiJob();
+        sleep(3);
+    }
+}
+    */
+
+#include "monitor.h"
+#include "shared.h"
+#include "logger.h"
+#include "job.h"
+#include "qoscg.h"
+#include "reclaim.h"
+#include <cctype>
+#include <cerrno>
+#include <csignal>
+#include <cstring>
+#include <ctime>
+#include <dirent.h>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <sys/types.h>
+#include <unistd.h>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+const int TTL_GIAY = 60;                 // thoi gian toi thieu bi dung truoc khi duoc xet tha
+const double MOC_THA_PHAN_TRAM = 32;     // RAM he thong trong >= muc nay thi coi la thoang
+
+static double docPhanTramRamTrong() {
+    std::ifstream file("/proc/meminfo");
+    if (!file.is_open()) return -1;
+    std::string dong;
+    long memTotal = 0, memAvailable = 0;
+    while (std::getline(file, dong)) {
+        if (dong.substr(0, 9) == "MemTotal:") {
+            std::istringstream iss(dong);
+            std::string nhan, donvi;
+            iss >> nhan >> memTotal >> donvi;
+        }
+        if (dong.substr(0, 13) == "MemAvailable:") {
+            std::istringstream iss(dong);
+            std::string nhan, donvi;
+            iss >> nhan >> memAvailable >> donvi;
+        }
+    }
+    if (memTotal <= 0) return -1;
+    return double(memAvailable) / double(memTotal) * 100;
+}
+
+static long docVmRssKb(int pid) {
+    std::ifstream f("/proc/" + std::to_string(pid) + "/status");
+    std::string dong;
+    while (std::getline(f, dong)) {
+        if (dong.compare(0, 6, "VmRSS:") == 0) {
+            std::istringstream iss(dong);
+            std::string nhan;
+            long kb = -1;
+            iss >> nhan >> kb;
+            return kb;
+        }
+    }
+    return -1;
+}
+
+void chayMonitorLoop() {
+    std::unordered_map<int, time_t> daDungLuc;      // PID -> thoi diem bi dung
+    std::unordered_map<int, long> gioiHanLucDung;   // PID -> gioi han RAM luc bi dung
+    std::unordered_map<int, int> daGanCpu;          // PID -> % CPU dang ap
+    std::unordered_set<int> daBaoLoi;               // PID da ghi loi, tranh ghi lap moi 3 giay
+
+    cgDonDepKhiKhoiDong();
+    ghiNhatKy("Monitor khoi dong | TTL " + std::to_string(TTL_GIAY) + "s | moc tha "
+              + std::to_string((int)MOC_THA_PHAN_TRAM) + "%");
+
+    while (true) {
+        std::vector<LuatRieng> luat;
+        {
+            std::lock_guard<std::mutex> lg(khoa);
+            luat = danhSachLuat;
+        }
+
+        double phanTramTrong = docPhanTramRamTrong();
+        std::cout << "RAM he thong con trong: " << phanTramTrong << "%" << std::endl;
+
+        std::unordered_set<int> conSong;
+
+        DIR* dir = opendir("/proc");
+        if (dir == nullptr) {
+            std::cerr << "Loi: opendir khong duoc!" << std::endl;
+            sleep(3);
+            continue;
+        }
+
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != nullptr) {
+            std::string ten = entry->d_name;
+            bool laPid = !ten.empty();
+            for (char c : ten) {
+                if (!isdigit(static_cast<unsigned char>(c))) { laPid = false; break; }
+            }
+            if (!laPid) continue;
+
+            std::ifstream file("/proc/" + ten + "/status");
+            if (!file.is_open()) continue;
+
+            std::string dong, tenTienTrinh;
+            long uidTienTrinh = -1;
+            long vmrss = -1;
+            while (std::getline(file, dong)) {
+                if (dong.substr(0, 5) == "Name:") {
+                    std::istringstream iss(dong);
+                    std::string nhan;
+                    iss >> nhan >> tenTienTrinh;
+                }
+                if (dong.substr(0, 4) == "Uid:") {
+                    std::istringstream iss(dong);
+                    std::string nhan;
+                    iss >> nhan >> uidTienTrinh;
+                }
+                if (dong.substr(0, 6) == "VmRSS:") {
+                    std::istringstream iss(dong);
+                    std::string nhan, donvi;
+                    iss >> nhan >> vmrss >> donvi;
+                }
+            }
+
+            int soPid = std::stoi(ten);
+            conSong.insert(soPid);
+
+            // Bao ve: khong dong vao init, chinh agent, tien trinh cua root, kernel thread
+            if (soPid == 1 || soPid == getpid() || uidTienTrinh == 0 || vmrss < 0) continue;
+
+            // Chon luat ap dung: luat rieng cua user uu tien hon luat chung (uid = -1)
+            const LuatRieng* rieng = nullptr;
+            const LuatRieng* chung = nullptr;
+            for (const LuatRieng& l : luat) {
+                if (l.tenTienTrinh != tenTienTrinh) continue;
+                if (l.uid == uidTienTrinh) rieng = &l;
+                else if (l.uid == -1) chung = &l;
+            }
+            const LuatRieng* ap = rieng ? rieng : chung;
+            long gioiHan = (ap && ap->maxKb > 0) ? ap->maxKb : -1;
+            int cpuMuon = ap ? ap->maxCpu : 0;
+
+            const std::string moTa = "PID " + std::to_string(soPid) + " | " + tenTienTrinh
+                                     + " | uid " + std::to_string(uidTienTrinh);
+
+            // ---------------- CPU: gioi han bang cgroup ----------------
+            auto itCpu = daGanCpu.find(soPid);
+            if (cpuMuon > 0) {
+                if (itCpu == daGanCpu.end() || itCpu->second != cpuMuon) {
+                    if (cgGioiHanCpu(soPid, cpuMuon)) {
+                        daGanCpu[soPid] = cpuMuon;
+                        ghiNhatKy("CPU | " + moTa + " | gioi han " + std::to_string(cpuMuon) + "% cua mot loi");
+                    } else if (daBaoLoi.count(soPid) == 0) {
+                        daBaoLoi.insert(soPid);
+                        ghiNhatKy("LOI | Khong dat duoc gioi han CPU " + moTa + " | " + std::strerror(errno));
+                    }
+                }
+            } else if (itCpu != daGanCpu.end()) {
+                cgGo(soPid);
+                daGanCpu.erase(itCpu);
+                ghiNhatKy("CPU | " + moTa + " | go gioi han");
+            }
+
+            // ---------------- RAM: tam dung, tuy chon ep ra swap ----------------
+            bool daDung = daDungLuc.count(soPid) > 0;
+
+            if (gioiHan != -1 && vmrss >= gioiHan && !daDung) {
+                if (kill(soPid, SIGSTOP) == 0) {
+                    daDungLuc[soPid] = time(nullptr);
+                    gioiHanLucDung[soPid] = gioiHan;
+                    daBaoLoi.erase(soPid);
+                    std::cout << "Da tam dung " << moTa << " | " << vmrss / 1024 << " MB" << std::endl;
+                    ghiNhatKy("DUNG | " + moTa + " | " + std::to_string(vmrss / 1024)
+                              + " MB | gioi han " + std::to_string(gioiHan / 1024) + " MB");
+
+                    if (ap && ap->thuHoiRam) {
+                        long truoc = docVmRssKb(soPid);
+                        long byte = thuHoiRamTienTrinh(soPid);
+                        long sau = docVmRssKb(soPid);
+                        if (byte >= 0) {
+                            ghiNhatKy("THU HOI | " + moTa + " | RSS " + std::to_string(truoc / 1024)
+                                      + " MB -> " + std::to_string(sau / 1024) + " MB");
+                        } else {
+                            ghiNhatKy("LOI | Khong thu hoi duoc RAM " + moTa + " | " + std::strerror(errno));
+                        }
+                    }
+                } else if (daBaoLoi.count(soPid) == 0) {
+                    daBaoLoi.insert(soPid);
+                    ghiNhatKy("LOI | Khong dung duoc " + moTa + " | " + std::strerror(errno));
+                }
+            } else if (daDung) {
+                bool luatGo = (gioiHan == -1);
+                // Han muc doi (nang len) thi tha. Khong tha chi vi RSS giam: sau khi ep ra swap RSS luon giam
+                bool luatDoi = !luatGo && gioiHan != gioiHanLucDung[soPid] && vmrss < gioiHan;
+                bool hetHan = (time(nullptr) - daDungLuc.at(soPid) >= TTL_GIAY) && phanTramTrong >= MOC_THA_PHAN_TRAM;
+                if (luatGo || luatDoi || hetHan) {
+                    if (kill(soPid, SIGCONT) == 0) {
+                        std::string lyDo;
+                        if (luatGo) lyDo = "luat bi go";
+                        else if (luatDoi) lyDo = "han muc nang len";
+                        else lyDo = "het han TTL";
+                        daDungLuc.erase(soPid);
+                        gioiHanLucDung.erase(soPid);
+                        daBaoLoi.erase(soPid);
+                        std::cout << "Cho chay tiep " << moTa << std::endl;
+                        ghiNhatKy("THA | " + moTa + " | ly do: " + lyDo);
+                    } else if (daBaoLoi.count(soPid) == 0) {
+                        daBaoLoi.insert(soPid);
+                        ghiNhatKy("LOI | Khong tha duoc " + moTa + " | " + std::strerror(errno));
+                    }
+                }
+            }
+        }
+        closedir(dir);
+
+        // Don dep PID khong con ton tai
+        for (auto it = daDungLuc.begin(); it != daDungLuc.end(); ) {
+            if (conSong.count(it->first) == 0) {
+                ghiNhatKy("DON DEP | PID " + std::to_string(it->first) + " da thoat khi dang bi dung");
+                gioiHanLucDung.erase(it->first);
+                it = daDungLuc.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        for (auto it = daGanCpu.begin(); it != daGanCpu.end(); ) {
+            if (conSong.count(it->first) == 0) {
+                cgGo(it->first);            // xoa cgroup rong cua tien trinh da thoat
+                it = daGanCpu.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        for (auto it = daBaoLoi.begin(); it != daBaoLoi.end(); ) {
+            if (conSong.count(*it) == 0) it = daBaoLoi.erase(it);
+            else ++it;
+        }
+
         thuHoiJob();
         sleep(3);
     }

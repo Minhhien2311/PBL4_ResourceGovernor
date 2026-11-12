@@ -23,10 +23,21 @@ void chayHeartbeatLoop() {
         const std::string nodeId = docCauHinh("NodeId", "server-a");
 
         SoLieu sl = laySoLieu();
+        std::vector<TienTrinhInfo> dsTT = layTienTrinh(30);
 
         CURL* curl = curl_easy_init();
         if (curl) {
             json bodyJson;
+            json mang = json::array();
+            for (const TienTrinhInfo& t : dsTT) {
+                json o;
+                o["name"] = t.ten;
+                o["pid"] = t.pid;
+                o["user"] = t.user;
+                o["ramMB"] = t.ramMb;
+                mang.push_back(o);
+            }
+            bodyJson["Processes"] = mang;
             bodyJson["NodeType"] = "OSAgent";          // dung theo tai lieu nhom
             bodyJson["NodeId"] = nodeId;               // truong them de phan biet nhieu server
             bodyJson["Status"] = "Running";

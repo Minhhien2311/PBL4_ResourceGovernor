@@ -16,6 +16,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
+#include <sys/stat.h>
 
 using json = nlohmann::json;
 
@@ -183,8 +184,34 @@ json xuLySubmitJob(const json& j, const std::string& nguon) {
         if (bang.size() >= MAX_JOB_BANG) return loi("Job table full");
     }
 
+    // Tao output dir /tmp/qos-jobs/<id>/, owner la user chay job
+    std::string outDir = "/tmp/qos-jobs/" + id;
+    mkdir("/tmp/qos-jobs", 0755);
+    if (mkdir(outDir.c_str(), 0755) != 0 && errno != EEXIST) {
+        ghiNhatKy(nguon + " | LOI | Khong tao duoc output dir " + outDir + " | " + std::strerror(errno));
+        return loi("Cannot create output dir");
+    }
+    if (chown(outDir.c_str(), uid, gid) != 0) {
+        ghiNhatKy(nguon + " | CANH BAO | Khong chown duoc " + outDir + " | " + std::strerror(errno));
+    }
+
+    // Chuan bi env string TRUOC fork (strdup -> con tro on dinh sau fork)
+    std::string envJobIdStr = "JOB_ID=" + id;
+    std::string envOutDirStr = "JOB_OUTPUT_DIR=" + outDir;
+    char* envJobId = strdup(envJobIdStr.c_str());
+    char* envOutDir = strdup(envOutDirStr.c_str());
+    if (!envJobId || !envOutDir) {
+        free(envJobId);
+        free(envOutDir);
+        return loi("Memory allocation failed");
+    }
+
     pid_t pid = fork();
-    if (pid < 0) return loi("Launch failed");
+    if (pid < 0) {
+        free(envJobId);
+        free(envOutDir);
+        return loi("Launch failed");
+    }
 
     if (pid == 0) {
         // Tien trinh con: chi dung cac loi goi he thong
@@ -206,10 +233,15 @@ json xuLySubmitJob(const json& j, const std::string& nguon) {
         if (setuid(uid) != 0) _exit(126);
         if (setuid(0) == 0) _exit(126);   // neu van lay lai duoc root thi khong chay
         if (chdir("/tmp") != 0) _exit(126);
+        putenv(envJobId);                 // ← THÊM DÒNG NÀY
+        putenv(envOutDir);                // ← THÊM DÒNG NÀY
         execv(argv[0], argv.data());
         _exit(127);
     }
 
+    // Parent: giai phong ban copy cua minh (con da co copy rieng sau fork)
+    free(envJobId);      // ← THÊM
+    free(envOutDir);     // ← THÊM
     JobAgent jb;
     jb.pid = pid;
     jb.loai = loai;

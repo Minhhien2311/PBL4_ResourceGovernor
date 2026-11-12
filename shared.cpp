@@ -1,4 +1,4 @@
 #include "shared.h"
 
 std::mutex khoa;
-std::vector<LuatRieng> danhSachLuat = { {-1, "eat_ram", 100000} };
+std::vector<LuatRieng> danhSachLuat;   // rong — tranh policy "ma" tu lan test cu
