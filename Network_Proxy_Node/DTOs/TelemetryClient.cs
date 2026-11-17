@@ -1,45 +1,69 @@
 using System;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 public class TelemetryClient
 {
-    private static readonly HttpClient _httpClient = new HttpClient();
-    private const string HeartbeatUrl = "http://localhost:5247/api/telemetry/heartbeat";
-    private const string LogUrl = "http://localhost:5247/api/telemetry/log";
+    private static readonly HttpClient _httpClient = new HttpClient
+    {
+        Timeout = TimeSpan.FromSeconds(3)
+    };
 
     public void StartHeartbeat()
     {
         _ = Task.Run(async () =>
         {
+            using Process self = Process.GetCurrentProcess();
+            TimeSpan lastCpu = self.TotalProcessorTime;
+            Stopwatch clock = Stopwatch.StartNew();
+
             while (true)
             {
+                await Task.Delay(5000);
+
                 try
                 {
+                    double elapsedSec = clock.Elapsed.TotalSeconds;
+                    clock.Restart();
+
+                    // CPU của riêng tiến trình proxy, tính theo delta
+                    self.Refresh();
+                    TimeSpan cpuNow = self.TotalProcessorTime;
+                    double cpuPercent = (cpuNow - lastCpu).TotalSeconds
+                                        / (elapsedSec * Environment.ProcessorCount) * 100.0;
+                    lastCpu = cpuNow;
+
+                    // Băng thông (KB/s) tính theo delta giữa 2 lần gửi
+                    long totalNow = Interlocked.Read(ref Program.TotalBytesTransferred);
+                    long deltaBytes = totalNow - Program.LastBytesSnapshot;
+                    Program.LastBytesSnapshot = totalNow;
+                    double kbPerSec = deltaBytes / 1024.0 / elapsedSec;
+
                     var payload = new HeartbeatPayload
                     {
                         NodeType = "NetworkProxy",
                         Status = "Running",
-                        CPUUsagePercent = 12.5,
-                        TotalRAM = 8192,
-                        UsedRAM = 2450,
-                        ProcessCount = 48,
-                        BandwidthInUse = Program.TotalBytesTransferred / 1024.0,
+                        CPUUsagePercent = Math.Round(Math.Max(0, cpuPercent), 2),
+                        TotalRAM = GetTotalRamMb(),
+                        UsedRAM = Math.Round(self.WorkingSet64 / 1024.0 / 1024.0, 1),
+                        ProcessCount = GetProcessCount(),
+                        BandwidthInUse = Math.Round(kbPerSec, 2),
                         ActiveConnections = Program.ActiveProxyConnections
                     };
 
                     string json = JsonSerializer.Serialize(payload);
                     var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                    await _httpClient.PostAsync(HeartbeatUrl, content);
+                    await _httpClient.PostAsync(ProxyConfig.HeartbeatUrl, content);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Console.WriteLine($"[Telemetry] Gui heartbeat that bai: {ex.Message}");
                 }
-
-                await Task.Delay(5000);
             }
         });
     }
@@ -58,10 +82,32 @@ public class TelemetryClient
 
             string json = JsonSerializer.Serialize(payload);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
-            await _httpClient.PostAsync(LogUrl, content);
+            await _httpClient.PostAsync(ProxyConfig.LogUrl, content);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Telemetry] Gui log that bai: {ex.Message}");
+        }
+    }
+
+    private static double GetTotalRamMb()
+    {
+        long bytes = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+        return Math.Round(bytes / 1024.0 / 1024.0, 0);
+    }
+
+    private static int GetProcessCount()
+    {
+        try
+        {
+            Process[] all = Process.GetProcesses();
+            int count = all.Length;
+            foreach (Process p in all) p.Dispose();
+            return count;
         }
         catch
         {
+            return 0;
         }
     }
 }

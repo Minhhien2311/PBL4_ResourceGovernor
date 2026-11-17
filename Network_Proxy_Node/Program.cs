@@ -14,17 +14,25 @@ class Program
     public static long TotalBytesTransferred = 0;
     public static int ActiveProxyConnections = 0;
 
+    // Mốc dùng để tính tốc độ băng thông theo delta (TelemetryClient sẽ dùng ở bước 5)
+    public static long LastBytesSnapshot = 0;
+
     static async Task Main(string[] args)
     {
         Console.WriteLine("Khoi dong Network QoS Proxy (Full Data & Control Plane)...");
+        Console.WriteLine($"[Config] ControlPort={ProxyConfig.ControlPort}, DataPort={ProxyConfig.DataPort}");
 
         var telemetry = new TelemetryClient();
         telemetry.StartHeartbeat();
 
         var controlPlane = new ControlPlaneServer();
-        _ = controlPlane.StartListeningAsync();
+        var dataPlaneProxy = new PolicyListener(ProxyConfig.DataPort);
 
-        var dataPlaneProxy = new PolicyListener(8080);
-        await dataPlaneProxy.StartAsync();
+        Task controlTask = controlPlane.StartListeningAsync();
+        Task dataTask = dataPlaneProxy.StartAsync();
+
+        // Nếu 1 trong 2 listener chết (ví dụ port bị chiếm), await sẽ ném lại exception
+        Task finished = await Task.WhenAny(controlTask, dataTask);
+        await finished;
     }
 }
