@@ -1,0 +1,43 @@
+﻿@model IEnumerable<WebAdmin_ControlPlane.Models.EventLog>
+
+@{
+    ViewData["Title"] = "Nhật ký sự kiện";
+}
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Danh sách sự kiện</h3>
+    </div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap">
+            <thead>
+                <tr>
+                    <th>Thời gian</th>
+                    <th>Node</th>
+                    <th>Loại sự kiện</th>
+                    <th>Thông điệp</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model != null && Model.Any())
+                {
+                    @foreach (var log in Model)
+                    {
+                        <tr>
+                            <td>@log.Timestamp.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                            <td>@log.NodeType</td>
+                            <td><span class="badge bg-info">@log.EventType</span></td>
+                            <td>@log.Message</td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td colspan="4" class="text-center">Chưa có sự kiện nào.</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
