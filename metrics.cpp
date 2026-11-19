@@ -9,6 +9,11 @@
 #include <cmath>
 #include <pwd.h>
 #include <vector>
+#include <mutex>
+
+static long s_tongCu = 0, s_rangCu = 0;
+static double s_cpuCache = 0.0;
+static std::mutex s_mCpu;
 
 static bool docCpu(long& tong, long& rang) {
     std::ifstream file("/proc/stat");
@@ -16,7 +21,7 @@ static bool docCpu(long& tong, long& rang) {
     if (!std::getline(file, dong)) return false;
     std::istringstream iss(dong);
     std::string nhan;
-    long user, nice, system, idle, iowait, irq, softirq, steal;
+    long user = 0, nice = 0, system = 0, idle = 0, iowait = 0, irq = 0, softirq = 0, steal = 0;
     iss >> nhan >> user >> nice >> system >> idle >> iowait >> irq >> softirq >> steal;
     tong = user + nice + system + idle + iowait + irq + softirq + steal;
     rang = idle + iowait;
@@ -26,13 +31,34 @@ static bool docCpu(long& tong, long& rang) {
 SoLieu laySoLieu() {
     SoLieu s{0, 0, 0, 0};
 
-    // CPU: do hai lan cach nhau 0.5 giay
-    long tong1, rang1, tong2, rang2;
-    if (docCpu(tong1, rang1)) {
-        usleep(500000);
-        if (docCpu(tong2, rang2) && tong2 > tong1) {
-            s.cpuPhanTram = 100.0 * (double)((tong2 - tong1) - (rang2 - rang1)) / (double)(tong2 - tong1);;
+    // CPU: Lấy mẫu không block (so sánh với lần đọc trước đó)
+    {
+        std::lock_guard<std::mutex> lg(s_mCpu);
+        long tongMoi = 0, rangMoi = 0;
+        if (docCpu(tongMoi, rangMoi)) {
+            if (s_tongCu == 0) {
+                // Lần đầu khởi động: ngủ nhẹ 50ms (0.05s) để có mẫu ban đầu
+                usleep(50000);
+                long t2 = 0, r2 = 0;
+                if (docCpu(t2, r2) && t2 > tongMoi) {
+                    s_cpuCache = 100.0 * (double)((t2 - tongMoi) - (r2 - rangMoi)) / (double)(t2 - tongMoi);
+                    tongMoi = t2;
+                    rangMoi = r2;
+                }
+            } else if (tongMoi > s_tongCu) {
+                long dTong = tongMoi - s_tongCu;
+                long dRang = rangMoi - s_rangCu;
+                if (dTong > 0) {
+                    double pct = 100.0 * (double)(dTong - dRang) / (double)dTong;
+                    if (pct < 0.0) pct = 0.0;
+                    if (pct > 100.0) pct = 100.0;
+                    s_cpuCache = pct;
+                }
+            }
+            s_tongCu = tongMoi;
+            s_rangCu = rangMoi;
         }
+        s.cpuPhanTram = s_cpuCache;
     }
 
     // RAM
