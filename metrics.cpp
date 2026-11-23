@@ -1,4 +1,5 @@
 #include "metrics.h"
+#include "config.h"
 #include <cctype>
 #include <dirent.h>
 #include <fstream>
@@ -10,10 +11,24 @@
 #include <pwd.h>
 #include <vector>
 #include <mutex>
+#include <set>
 
 static long s_tongCu = 0, s_rangCu = 0;
 static double s_cpuCache = 0.0;
 static std::mutex s_mCpu;
+
+static std::set<std::string> docTienTrinhCanAn() {
+    std::set<std::string> ketQua;
+    std::istringstream danhSach(docCauHinh("ExcludeProcessNames", ""));
+    std::string ten;
+    while (std::getline(danhSach, ten, ',')) {
+        const size_t dau = ten.find_first_not_of(" \t\r\n");
+        if (dau == std::string::npos) continue;
+        const size_t cuoi = ten.find_last_not_of(" \t\r\n");
+        ketQua.insert(ten.substr(dau, cuoi - dau + 1));
+    }
+    return ketQua;
+}
 
 static bool docCpu(long& tong, long& rang) {
     std::ifstream file("/proc/stat");
@@ -97,6 +112,7 @@ static std::string tenUser(long uid) {
 
 std::vector<TienTrinhInfo> layTienTrinh(size_t toiDa) {
     std::vector<TienTrinhInfo> ds;
+    const std::set<std::string> tienTrinhCanAn = docTienTrinhCanAn();
     DIR* dir = opendir("/proc");
     if (dir == nullptr) return ds;
 
@@ -122,6 +138,7 @@ std::vector<TienTrinhInfo> layTienTrinh(size_t toiDa) {
             else if (dong.compare(0, 6, "VmRSS:") == 0) iss >> nhan >> vmrss;
         }
         if (vmrss < 0) continue;   // kernel thread khong co VmRSS
+        if (tienTrinhCanAn.count(name) > 0) continue;
 
         TienTrinhInfo t;
         t.pid = std::stoi(ten);
