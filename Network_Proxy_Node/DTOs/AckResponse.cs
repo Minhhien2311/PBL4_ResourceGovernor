@@ -1,5 +1,5 @@
-﻿public class AckResponse
+public class AckResponse
 {
-    public string status { get; set; }
-    public string message { get; set; }   
-} 
+    public string status { get; set; } = string.Empty;
+    public string message { get; set; } = string.Empty;
+}

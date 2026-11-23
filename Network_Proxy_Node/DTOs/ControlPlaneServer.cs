@@ -4,30 +4,41 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 public class ControlPlaneServer
 {
-    private const string SecretToken = "abc123";
-
-    public async Task StartListeningAsync()
+    private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
     {
-        TcpListener listener = new TcpListener(
-            IPAddress.Parse("127.0.0.1"),
-            9002
-        );
+        PropertyNameCaseInsensitive = true
+    };
 
-        listener.Start();
+    // port = 0: dung cong chinh (ProxyConfig.ControlPort).
+    // optional = true: cong phu, neu bi chiem (vi du Agent da dung 9001) thi chi canh bao va bo qua.
+    public async Task StartListeningAsync(int port = 0, bool optional = false)
+    {
+        if (port == 0)
+        {
+            port = ProxyConfig.ControlPort;
+        }
 
-        Console.WriteLine("[Control] Dang lang nghe tren 127.0.0.1:9002");
+        TcpListener listener = new TcpListener(IPAddress.Any, port);
+        try
+        {
+            listener.Start();
+        }
+        catch (SocketException ex) when (optional)
+        {
+            Console.WriteLine($"[Control] Khong mo duoc cong phu {port}: {ex.Message} (bo qua)");
+            return;
+        }
+
+        Console.WriteLine($"[Control] Dang lang nghe tren 0.0.0.0:{port}");
 
         while (true)
         {
             TcpClient client = await listener.AcceptTcpClientAsync();
-
-            // Thêm dòng thông báo kết nối thành công ở đây
-            Console.WriteLine($"[Control] Web Admin da ket noi tu IP: {client.Client.RemoteEndPoint}");
-
             _ = Task.Run(() => HandleAdminCommandAsync(client));
         }
     }
@@ -38,125 +49,147 @@ public class ControlPlaneServer
         {
             using (client)
             using (NetworkStream stream = client.GetStream())
-            using (StreamReader reader = new StreamReader(
-                stream,
-                Encoding.UTF8,
-                false,
-                1024,
-                true))
-            using (StreamWriter writer = new StreamWriter(
-                stream,
-                new UTF8Encoding(false),
-                1024,
-                true)
+            using (StreamReader reader = new StreamReader(stream, Encoding.UTF8, false, 1024, true))
+            using (StreamWriter writer = new StreamWriter(stream, new UTF8Encoding(false), 1024, true) { AutoFlush = true })
             {
-                AutoFlush = true
-            })
-            {
-                // Đọc đúng 1 command JSON kết thúc bằng newline
-                string jsonString = await reader.ReadLineAsync();
+                string? line;
 
-                if (string.IsNullOrWhiteSpace(jsonString))
-                {
-                    return;
-                }
-
-                // Cho phép JSON không phân biệt hoa/thường
-                var options = new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                };
-
-                NetworkPolicyCommand? command;
-
+                // Chờ tối đa 5 giây cho 1 dòng JSON kết thúc bằng \n
                 try
                 {
-                    command = JsonSerializer.Deserialize<NetworkPolicyCommand>(
-                        jsonString,
-                        options
-                    );
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    line = await reader.ReadLineAsync(cts.Token);
                 }
-                catch (JsonException ex)
+                catch (OperationCanceledException)
                 {
-                    Console.WriteLine(
-                        $"[Control] JSON khong hop le: {ex.Message}"
-                    );
-
-                    var errorAck = new AckResponse
-                    {
-                        status = "error",
-                        message = "Invalid JSON"
-                    };
-
-                    string errorJson = JsonSerializer.Serialize(errorAck);
-                    await writer.WriteAsync(errorJson + "\n");
-
+                    Console.WriteLine("[Control] Timeout khi doc command");
                     return;
                 }
 
-                var ack = new AckResponse();
-
-                // Kiểm tra command có tồn tại không
-                if (command == null)
+                if (string.IsNullOrWhiteSpace(line))
                 {
-                    ack.status = "error";
-                    ack.message = "Invalid command";
-                }
-                // Kiểm tra AuthToken
-                else if (command.AuthToken != SecretToken)
-                {
-                    ack.status = "error";
-                    ack.message = "Invalid token";
-
-                    Console.WriteLine(
-                        "[Control] Tu choi command: Invalid token"
-                    );
-                }
-                // Xử lý UpdateNetworkPolicy
-                else if (command.CommandType == "UpdateNetworkPolicy")
-                {
-                    lock (Program.PolicyLock)
-                    {
-                        Program.CurrentPolicy = command;
-                    }
-
-                    ack.status = "ok";
-                    ack.message = "Network policy applied successfully";
-
-                    Console.WriteLine(
-                        $"[Control] Policy applied: " +
-                        $"Port={command.TargetPort}, " +
-                        $"Bandwidth={command.MaxBandwidthKbps} Kbps, " +
-                        $"IP={command.ApplyToIp}"
-                    );
-
-                    _ = TelemetryClient.SendLogAsync(
-                        "PolicyApplied",
-                        $"Da ap dung gioi han bang thong moi: " +
-                        $"{command.MaxBandwidthKbps} Kbps"
-                    );
-                }
-                else
-                {
-                    ack.status = "error";
-                    ack.message = "Unknown command";
-
-                    Console.WriteLine(
-                        $"[Control] Unknown command: {command.CommandType}"
-                    );
+                    return;
                 }
 
-                // Gửi ACK kết thúc bằng newline
-                string responseJson = JsonSerializer.Serialize(ack);
+                object response = ProcessMessage(line);
 
-                await writer.WriteAsync(responseJson + "\n");
+                // Kiểu object: System.Text.Json tự dùng kiểu thật (AckResponse hoặc MetricsResponse)
+                await writer.WriteAsync(JsonSerializer.Serialize(response) + "\n");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine(
-                $"[Loi Proxy Bi Crash]: {ex.Message}"
-            );
+            Console.WriteLine($"[Loi Proxy Bi Crash]: {ex.Message}");
         }
+    }
+
+    private object ProcessMessage(string line)
+    {
+        // Lớp 1: bóc vỏ { Payload, Signature }
+        CommandEnvelope? envelope;
+        try
+        {
+            envelope = JsonSerializer.Deserialize<CommandEnvelope>(line, JsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            Console.WriteLine($"[Control] JSON khong hop le: {ex.Message}");
+            return Error("Invalid JSON");
+        }
+
+        if (envelope == null
+            || string.IsNullOrEmpty(envelope.Payload)
+            || string.IsNullOrEmpty(envelope.Signature))
+        {
+            return Error("Invalid JSON");
+        }
+
+        // Xác thực HMAC trên chuỗi Payload NGUYÊN BẢN
+        string expected = HmacHelper.ComputeHmacSha256Hex(
+            envelope.Payload,
+            ProxyConfig.SecretToken);
+
+        if (!HmacHelper.SignatureEquals(envelope.Signature, expected))
+        {
+            Console.WriteLine("[Control] Tu choi command: Invalid Signature");
+            return Error("Invalid Signature");
+        }
+
+        // Lớp 2: chỉ parse Payload SAU KHI chữ ký đúng
+        NetworkPolicyCommand? command;
+        try
+        {
+            command = JsonSerializer.Deserialize<NetworkPolicyCommand>(
+                envelope.Payload,
+                JsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            Console.WriteLine($"[Control] Payload khong hop le: {ex.Message}");
+            return Error("Invalid JSON");
+        }
+
+        if (command == null)
+        {
+            return Error("Invalid command");
+        }
+
+        // Kiểm tra Timestamp (Unix seconds, lệch tối đa 5 giây)
+        if (!HmacHelper.IsTimestampValid(
+                command.Timestamp,
+                ProxyConfig.MaxTimestampSkewSeconds))
+        {
+            Console.WriteLine("[Control] Tu choi command: Timestamp expired");
+            return Error("Timestamp expired");
+        }
+
+        // Controller hỏi số liệu định kỳ (poller.cpp, 5 giây/lần)
+        if (command.CommandType == "GetMetrics")
+        {
+            return MetricsCollector.Snapshot();
+        }
+
+        // Xử lý lệnh giới hạn băng thông.
+        // Web Admin gọi thẳng Proxy nên chấp nhận cả tên lệnh "SetNetworkPolicy".
+        if (command.CommandType == "UpdateNetworkPolicy"
+            || command.CommandType == "SetNetworkPolicy")
+        {
+            if (command.TargetPort < 1 || command.TargetPort > 65535)
+            {
+                return Error("Invalid TargetPort");
+            }
+
+            if (command.MaxBandwidthKbps <= 0)
+            {
+                return Error("Invalid MaxBandwidthKbps");
+            }
+
+            lock (Program.PolicyLock)
+            {
+                Program.CurrentPolicy = command;
+            }
+
+            Console.WriteLine(
+                $"[Control] Policy applied: Port={command.TargetPort}, " +
+                $"Bandwidth={command.MaxBandwidthKbps} Kbps, IP={command.ApplyToIp}");
+
+            _ = TelemetryClient.SendLogAsync(
+                "PolicyApplied",
+                $"Da ap dung gioi han bang thong moi: {command.MaxBandwidthKbps} Kbps");
+
+            return new AckResponse
+            {
+                status = "ok",
+                message = "Network policy applied"
+            };
+        }
+
+        Console.WriteLine($"[Control] Unknown command: {command.CommandType}");
+        return Error("Unknown command");
+    }
+
+    private static AckResponse Error(string message)
+    {
+        return new AckResponse { status = "error", message = message };
     }
 }
