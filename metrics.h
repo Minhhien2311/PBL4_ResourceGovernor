@@ -18,6 +18,8 @@ struct TienTrinhInfo {
     std::string user;
     long uid;
     double ramMb;
+    double cpuPercent = 0.0;
+    bool cpuAvailable = false;
 };
 
 std::vector<TienTrinhInfo> layTienTrinh(size_t toiDa);   // top tien trinh dung nhieu RAM nhat

@@ -462,7 +462,7 @@ void chayTcpServer() {
                     phanHoi["UsedRAM"] = sl.daDungRamMb;
                     phanHoi["ProcessCount"] = sl.soTienTrinh;
 
-                    std::vector<TienTrinhInfo> dsTT = layTienTrinh(30);
+                    std::vector<TienTrinhInfo> dsTT = layTienTrinh(50);
 
                     json mang = json::array();
 
@@ -473,6 +473,9 @@ void chayTcpServer() {
                         o["pid"] = t.pid;
                         o["user"] = t.user;
                         o["ramMB"] = t.ramMb;
+                        o["cpuPercent"] = t.cpuAvailable
+                                ? json(t.cpuPercent)
+                                : json(nullptr);
 
                         mang.push_back(o);
                     }

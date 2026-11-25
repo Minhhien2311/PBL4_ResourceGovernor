@@ -12,10 +12,21 @@
 #include <vector>
 #include <mutex>
 #include <set>
+#include <chrono>
+#include <unordered_map>
 
 static long s_tongCu = 0, s_rangCu = 0;
 static double s_cpuCache = 0.0;
 static std::mutex s_mCpu;
+
+struct MauCpuTienTrinh {
+    unsigned long long startTime = 0;
+    unsigned long long cpuTicks = 0;
+    std::chrono::steady_clock::time_point thoiDiem;
+};
+
+static std::unordered_map<int, MauCpuTienTrinh> s_mauCpuTienTrinh;
+static std::mutex s_mTienTrinh;
 
 static std::set<std::string> docTienTrinhCanAn() {
     std::set<std::string> ketQua;
@@ -28,6 +39,41 @@ static std::set<std::string> docTienTrinhCanAn() {
         ketQua.insert(ten.substr(dau, cuoi - dau + 1));
     }
     return ketQua;
+}
+
+static bool docThongTinCpuTienTrinh(
+    int pid,
+    unsigned long long& cpuTicks,
+    unsigned long long& startTime)
+{
+    std::ifstream file("/proc/" + std::to_string(pid) + "/stat");
+    std::string dong;
+    if (!std::getline(file, dong)) return false;
+
+    // Tên tiến trình nằm trong ngoặc và có thể chứa dấu cách.
+    // Tách từ dấu ')' cuối cùng để phần còn lại bắt đầu ở trường state (field 3).
+    const size_t ngoacDong = dong.rfind(')');
+    if (ngoacDong == std::string::npos || ngoacDong + 2 >= dong.size()) return false;
+
+    std::istringstream iss(dong.substr(ngoacDong + 2));
+    std::vector<std::string> truong;
+    std::string giaTri;
+    while (iss >> giaTri) truong.push_back(giaTri);
+
+    // Sau khi bỏ pid và comm, vị trí 11 và 12 lần lượt là utime, stime.
+    // Vị trí 19 là starttime.
+    if (truong.size() <= 19) return false;
+
+    try {
+        const auto userTicks = std::stoull(truong[11]);
+        const auto systemTicks = std::stoull(truong[12]);
+        startTime = std::stoull(truong[19]);
+        cpuTicks = userTicks + systemTicks;
+    } catch (...) {
+        return false;
+    }
+
+    return true;
 }
 
 static bool docCpu(long& tong, long& rang) {
@@ -145,6 +191,39 @@ std::vector<TienTrinhInfo> layTienTrinh(size_t toiDa) {
         t.ten = name;
         t.uid = uid;
         t.ramMb = std::round(vmrss / 1024.0 * 10) / 10;
+        t.cpuAvailable = false;
+
+        unsigned long long cpuTicks = 0;
+        unsigned long long startTime = 0;
+
+        if (docThongTinCpuTienTrinh(t.pid, cpuTicks, startTime)) {
+            const auto now = std::chrono::steady_clock::now();
+            const long ticksPerSecond = sysconf(_SC_CLK_TCK);
+
+            if (ticksPerSecond > 0) {
+                std::lock_guard<std::mutex> lock(s_mTienTrinh);
+
+                auto it = s_mauCpuTienTrinh.find(t.pid);
+                if (it != s_mauCpuTienTrinh.end()
+                    && it->second.startTime == startTime
+                    && cpuTicks >= it->second.cpuTicks) {
+
+                    const double thoiGianGiay =
+                        std::chrono::duration<double>(now - it->second.thoiDiem).count();
+
+                    if (thoiGianGiay > 0.0) {
+                        const double cpuGiay =
+                            static_cast<double>(cpuTicks - it->second.cpuTicks) / ticksPerSecond;
+
+                        // Phần trăm theo một lõi CPU; tiến trình đa luồng có thể vượt 100%.
+                        t.cpuPercent = cpuGiay / thoiGianGiay * 100.0;
+                        t.cpuAvailable = true;
+                    }
+                }
+
+                s_mauCpuTienTrinh[t.pid] = {startTime, cpuTicks, now};
+            }
+        }
         ds.push_back(t);
     }
     closedir(dir);
