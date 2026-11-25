@@ -8,17 +8,23 @@
 #include <deque>
 #include <random>
 #include <algorithm>
+#include <chrono>
 
 int main(int argc, char** argv) {
     int n = 10000000; // 10 triệu giao dịch mặc định
+    int durationSeconds = 45; // Thời gian tối thiểu để dễ quan sát mức CPU
     unsigned int seed = 42;
 
     for (int i = 1; i < argc; i++) {
         if (std::strcmp(argv[i], "--n") == 0 && i + 1 < argc) n = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--seed") == 0 && i + 1 < argc) seed = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--duration-seconds") == 0 && i + 1 < argc)
+            durationSeconds = std::atoi(argv[++i]);
     }
     if (n < 1000) n = 1000;
     if (n > 50000000) n = 50000000;
+    if (durationSeconds < 30) durationSeconds = 30;
+    if (durationSeconds > 60) durationSeconds = 60;
 
     const char* outDir = std::getenv("JOB_OUTPUT_DIR");
     std::string outPath = outDir ? (std::string(outDir) + "/result.json") : "result.json";
@@ -26,7 +32,7 @@ int main(int argc, char** argv) {
     printf("kiem_toan_job: n=%d seed=%u -> %s\n", n, seed, outPath.c_str());
     fflush(stdout);
 
-    time_t t0 = time(nullptr);
+    const auto t0 = std::chrono::steady_clock::now();
     std::mt19937 rng(seed);
     std::uniform_int_distribution<long> distTien(1000, 500000000);
     std::uniform_int_distribution<int> distGio(0, 23);
@@ -114,7 +120,18 @@ int main(int argc, char** argv) {
         }
     }
 
-    double thoiGianChay = difftime(time(nullptr), t0);
+    // Nếu hai lượt phân tích hoàn tất sớm, tiếp tục tính checksum CPU đến hết
+    // thời lượng yêu cầu để có thể quan sát tiến trình trong lúc kiểm thử.
+    volatile unsigned long long checksumLap = 0;
+    unsigned long long giaTri = seed;
+    while (std::chrono::steady_clock::now() - t0
+           < std::chrono::seconds(durationSeconds)) {
+        giaTri = giaTri * 2862933555777941757ULL + 3037000493ULL;
+        checksumLap = checksumLap + ((giaTri >> 17) ^ (giaTri & 0xFFFFULL));
+    }
+
+    const double thoiGianChay =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
 
     FILE* f = std::fopen(outPath.c_str(), "w");
     if (!f) { perror("fopen"); return 1; }
