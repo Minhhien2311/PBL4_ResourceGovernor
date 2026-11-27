@@ -1,4 +1,4 @@
-﻿@model WebAdmin_ControlPlane.Models.ResourcePolicy
+﻿@* @model WebAdmin_ControlPlane.Models.ResourcePolicy
 @{
     ViewData["Title"] = "Chỉnh sửa Chính sách";
 }
@@ -6,14 +6,14 @@
 <div class="row">
     <div class="col-md-8 mx-auto">
         <div class="card card-warning">
-            <div class="card-header"><h3 class="card-title">Chỉnh sửa Luật</h3></div>
+            <div class="card-header"><h3 class="card-title">Cập nhật Chính sách</h3></div>
             <form asp-action="Edit">
                 <div class="card-body">
                     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
                     <input type="hidden" asp-for="Id" />
 
                     <div class="form-group mb-3">
-                        <label class="control-label">Server (Node)</label>
+                        <label class="control-label">Chọn Server (Node)</label>
                         <select asp-for="NodeId" id="serverDropdown" class="form-control" asp-items="ViewBag.Servers">
                             <option value="">-- Chọn Server --</option>
                         </select>
@@ -21,39 +21,70 @@
                     </div>
 
                     <div class="form-group mb-3">
-                        <label class="control-label">Chọn Tiến trình (từ Agent)</label>
-                        <select id="processDropdown" class="form-control">
-                            <!-- Sẽ load danh sách cũ và mới bằng JS -->
-                            <option value="@Model.TargetProcess" selected>@Model.TargetProcess</option>
+                        <label asp-for="PolicyType" class="control-label">Loại Chính Sách</label>
+                        <select asp-for="PolicyType" class="form-control" id="policyType">
+                            <option value="OS">Quản lý RAM / CPU (OS)</option>
+                            <option value="NETWORK">Giới hạn Băng thông (Network)</option>
                         </select>
                     </div>
 
-                    <div class="form-group mb-3">
-                        <label asp-for="TargetProcess" class="control-label"></label>
-                        <input asp-for="TargetProcess" class="form-control" id="targetProcessInput" readonly required />
-                        <span asp-validation-for="TargetProcess" class="text-danger"></span>
+                    <!-- KHU VỰC OS (RAM/CPU) -->
+                    <div id="osFields">
+                        <div class="form-group mb-3">
+                            <label class="control-label">Chọn Tiến trình (từ Agent)</label>
+                            <select id="processDropdown" class="form-control">
+                                <option value="@Model.TargetProcess" selected>@Model.TargetProcess</option>
+                            </select>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label asp-for="TargetProcess" class="control-label"></label>
+                            <input asp-for="TargetProcess" class="form-control" id="targetProcessInput" readonly />
+                            <span asp-validation-for="TargetProcess" class="text-danger"></span>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label asp-for="TargetUser" class="control-label"></label>
+                            <input asp-for="TargetUser" class="form-control" id="targetUserInput" readonly />
+                            <span asp-validation-for="TargetUser" class="text-danger"></span>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 form-group mb-3">
+                                <label asp-for="MaxRamMB" class="control-label"></label>
+                                <input asp-for="MaxRamMB" class="form-control" />
+                                <span asp-validation-for="MaxRamMB" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6 form-group mb-3">
+                                <label asp-for="MaxCpuPercent" class="control-label"></label>
+                                <input asp-for="MaxCpuPercent" type="number" class="form-control" />
+                                <span asp-validation-for="MaxCpuPercent" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="form-group form-check mb-3">
+                            <input asp-for="ReclaimRam" class="form-check-input" type="checkbox" />
+                            <label class="form-check-label" asp-for="ReclaimRam"></label>
+                        </div>
                     </div>
 
-                    <div class="form-group mb-3">
-                        <label asp-for="TargetUser" class="control-label"></label>
-                        <input asp-for="TargetUser" class="form-control" id="targetUserInput" readonly required />
-                        <span asp-validation-for="TargetUser" class="text-danger"></span>
+                    <!-- KHU VỰC NETWORK (Băng thông) -->
+                    <div id="networkFields" style="display:none;">
+                        <div class="row">
+                            <div class="col-md-6 form-group mb-3">
+                                <label asp-for="TargetPort" class="control-label"></label>
+                                <input asp-for="TargetPort" type="number" class="form-control" />
+                                <span asp-validation-for="TargetPort" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6 form-group mb-3">
+                                <label asp-for="MaxBandwidthKbps" class="control-label"></label>
+                                <input asp-for="MaxBandwidthKbps" type="number" class="form-control" />
+                                <span asp-validation-for="MaxBandwidthKbps" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label asp-for="ApplyToIp" class="control-label"></label>
+                            <input asp-for="ApplyToIp" class="form-control" />
+                            <span asp-validation-for="ApplyToIp" class="text-danger"></span>
+                        </div>
                     </div>
 
-                    <div class="form-group mb-3">
-                        <label asp-for="MaxRamMB" class="control-label"></label>
-                        <input asp-for="MaxRamMB" class="form-control" required />
-                        <span asp-validation-for="MaxRamMB" class="text-danger"></span>
-                    </div>
-
-                    <div class="form-group mb-3">
-                        <label asp-for="OsAction" class="control-label"></label>
-                        <select asp-for="OsAction" class="form-control">
-                            <option value="Pause">Pause</option>
-                            <option value="Kill">Kill</option>
-                        </select>
-                        <span asp-validation-for="OsAction" class="text-danger"></span>
-                    </div>
                 </div>
                 <div class="card-footer">
                     <button type="submit" class="btn btn-warning">Lưu thay đổi</button>
@@ -65,11 +96,27 @@
 </div>
 
 @section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
     <script>
         $(document).ready(function () {
-            var processDropdown = $('#processDropdown');
+            // Ẩn/hiện trường theo loại chính sách ngay khi load trang
+            function togglePolicyFields() {
+                var type = $('#policyType').val();
+                if (type === 'OS') {
+                    $('#osFields').show();
+                    $('#networkFields').hide();
+                } else {
+                    $('#osFields').hide();
+                    $('#networkFields').show();
+                }
+            }
+            togglePolicyFields();
+            $('#policyType').change(togglePolicyFields);
 
-            // Khi đổi Server -> Load lại Process tương ứng
+            // Load process list (nếu đổi server)
+            var processDropdown = $('#processDropdown');
             $('#serverDropdown').change(function () {
                 var nodeId = $(this).val();
                 if (!nodeId) return;
@@ -80,12 +127,233 @@
                     $.each(data, function (index, proc) {
                         var isSelected = (proc.name === '@Model.TargetProcess') ? 'selected' : '';
                         processDropdown.append('<option value="' + proc.name + '" data-user="' + proc.user + '" ' + isSelected + '>'
-                            + proc.name + ' (' + proc.ramMB + ' MB, user: ' + proc.user + ')</option>');
+                            + proc.name + ' (' + proc.ramMB + ' MB, ' + proc.user + ')</option>');
                     });
                 });
             });
 
-            // Khi đổi Process -> Cập nhật Input
+            processDropdown.change(function () {
+                var selected = $(this).find('option:selected');
+                $('#targetProcessInput').val(selected.val());
+                $('#targetUserInput').val(selected.data('user'));
+            });
+        });
+    </script>
+} *@
+
+@model WebAdmin_ControlPlane.Models.ResourcePolicy
+@{
+    ViewData["Title"] = "Chỉnh sửa Chính sách";
+}
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card card-warning">
+            <div class="card-header"><h3 class="card-title">Cập nhật Chính sách</h3></div>
+            <form asp-action="Edit">
+                <div class="card-body">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                    <input type="hidden" asp-for="Id" />
+
+                    <div class="form-group mb-3">
+                        <label class="control-label">Chọn Server (Node)</label>
+                        <select asp-for="NodeId" id="serverDropdown" class="form-control" asp-items="ViewBag.Servers">
+                            <option value="">-- Chọn Server --</option>
+                        </select>
+                        <span asp-validation-for="NodeId" class="text-danger"></span>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label asp-for="PolicyType" class="control-label">Loại Chính Sách</label>
+                        <select asp-for="PolicyType" class="form-control" id="policyType">
+                            <option value="OS">Quản lý RAM / CPU (OS)</option>
+                            <option value="NETWORK">Giới hạn Băng thông (Network)</option>
+                        </select>
+                    </div>
+
+                    <!-- KHU VỰC OS (RAM/CPU) -->
+                    <div id="osFields">
+                        <div class="form-group mb-3">
+                            <label class="control-label">Chọn Tiến trình (từ Agent)</label>
+                            <select id="processDropdown" class="form-control">
+                                <option value="@Model.TargetProcess" data-user="@Model.TargetUser" selected>@Model.TargetProcess</option>
+                            </select>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label asp-for="TargetProcess" class="control-label"></label>
+                            <input asp-for="TargetProcess" class="form-control" id="targetProcessInput" readonly />
+                            <span asp-validation-for="TargetProcess" class="text-danger"></span>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label asp-for="TargetUser" class="control-label"></label>
+                            <input asp-for="TargetUser" class="form-control" id="targetUserInput" readonly />
+                            <span asp-validation-for="TargetUser" class="text-danger"></span>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 form-group mb-3">
+                                <label asp-for="MaxRamMB" class="control-label"></label>
+                                <input asp-for="MaxRamMB" class="form-control" />
+                                <span asp-validation-for="MaxRamMB" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6 form-group mb-3">
+                                <label asp-for="MaxCpuPercent" class="control-label"></label>
+                                <input asp-for="MaxCpuPercent" type="number" class="form-control" />
+                                <span asp-validation-for="MaxCpuPercent" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="form-group form-check mb-3">
+                            <input asp-for="ReclaimRam" class="form-check-input" type="checkbox" />
+                            <label class="form-check-label" asp-for="ReclaimRam"></label>
+                        </div>
+                    </div>
+
+                    <!-- KHU VỰC NETWORK (Băng thông) -->
+                    <div id="networkFields" style="display:none;">
+                        <div class="row">
+                            <div class="col-md-6 form-group mb-3">
+                                <label asp-for="TargetPort" class="control-label"></label>
+                                <input asp-for="TargetPort" type="number" class="form-control" />
+                                <span asp-validation-for="TargetPort" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6 form-group mb-3">
+                                <label asp-for="MaxBandwidthKbps" class="control-label"></label>
+                                <input asp-for="MaxBandwidthKbps" type="number" class="form-control" />
+                                <span asp-validation-for="MaxBandwidthKbps" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label asp-for="ApplyToIp" class="control-label"></label>
+                            <input asp-for="ApplyToIp" class="form-control" />
+                            <span asp-validation-for="ApplyToIp" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="card-footer">
+                    <button type="submit" class="btn btn-warning">Lưu thay đổi</button>
+                    <a asp-action="Index" class="btn btn-secondary">Quay lại</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+    <script>
+        $(document).ready(function () {
+            // Ẩn/hiện trường theo loại chính sách ngay khi load trang
+            function togglePolicyFields() {
+                var type = $('#policyType').val();
+                if (type === 'OS') {
+                    $('#osFields').show();
+                    $('#networkFields').hide();
+                } else {
+                    $('#osFields').hide();
+                    $('#networkFields').show();
+                }
+            }
+            togglePolicyFields();
+            $('#policyType').change(togglePolicyFields);
+
+            // Định dạng hiển thị: tên tiến trình (RAM: ... MB, CPU: ...% - user)
+            function formatProcessLabel(proc) {
+                var rawRam = (proc.ramMB !== undefined && proc.ramMB !== null) ? proc.ramMB : proc.RamMB;
+                var ramText = (rawRam !== undefined && rawRam !== null && !isNaN(rawRam))
+                    ? Number(rawRam).toFixed(1)
+                    : '0.0';
+
+                var rawCpu = (proc.cpuPercent !== undefined && proc.cpuPercent !== null) ? proc.cpuPercent : proc.CpuPercent;
+                var cpuText = (rawCpu !== undefined && rawCpu !== null && !isNaN(rawCpu))
+                    ? Number(rawCpu).toFixed(1) + '%'
+                    : 'N/A';
+
+                var userName = proc.user || proc.User || '';
+                var userSuffix = userName ? ' - ' + userName : '';
+
+                return (proc.name || proc.Name) + ' (RAM: ' + ramText + ' MB, CPU: ' + cpuText + userSuffix + ')';
+            }
+
+            var processDropdown = $('#processDropdown');
+            var currentTargetProcess = '@Model.TargetProcess';
+            var currentTargetUser = '@Model.TargetUser';
+
+            function loadProcessesForNode(nodeId, preserveCurrentSelection) {
+                if (!nodeId) return;
+
+                if (!preserveCurrentSelection) {
+                    $('#targetProcessInput').val('');
+                    $('#targetUserInput').val('');
+                }
+
+                processDropdown.prop('disabled', true).empty()
+                    .append('<option value="">-- Đang tải... --</option>');
+
+                $.get('@Url.Action("GetProcessList", "ResourcePolicies")', { nodeId: nodeId })
+                    .done(function (data) {
+                        processDropdown.empty().append('<option value="">-- Chọn tiến trình --</option>');
+                        var foundCurrent = false;
+
+                        if (data && data.length > 0) {
+                            $.each(data, function (index, proc) {
+                                var pName = proc.name || proc.Name;
+                                var pUser = proc.user || proc.User || '';
+                                var isSelected = preserveCurrentSelection && (pName === currentTargetProcess);
+                                if (isSelected) foundCurrent = true;
+
+                                processDropdown.append(
+                                    $('<option>')
+                                        .val(pName)
+                                        .attr('data-user', pUser)
+                                        .prop('selected', isSelected)
+                                        .text(formatProcessLabel(proc))
+                                );
+                            });
+                        }
+
+                        // Giữ lại tiến trình đang cấu hình nếu tiến trình đó hiện không nằm trong top 50
+                        if (preserveCurrentSelection && currentTargetProcess && !foundCurrent) {
+                            processDropdown.append(
+                                $('<option>')
+                                    .val(currentTargetProcess)
+                                    .attr('data-user', currentTargetUser)
+                                    .prop('selected', true)
+                                    .text(currentTargetProcess + ' (Đang áp dụng - ' + currentTargetUser + ')')
+                            );
+                        }
+
+                        processDropdown.prop('disabled', false);
+                    })
+                    .fail(function () {
+                        processDropdown.empty();
+                        if (preserveCurrentSelection && currentTargetProcess) {
+                            processDropdown.append(
+                                $('<option>')
+                                    .val(currentTargetProcess)
+                                    .attr('data-user', currentTargetUser)
+                                    .prop('selected', true)
+                                    .text(currentTargetProcess)
+                            );
+                        } else {
+                            processDropdown.append('<option value="">-- Không tải được danh sách tiến trình --</option>');
+                        }
+                        processDropdown.prop('disabled', false);
+                    });
+            }
+
+            // Tự động tải thông số RAM & CPU của Node hiện tại khi mở trang Edit
+            var initialNodeId = $('#serverDropdown').val();
+            if (initialNodeId && $('#policyType').val() === 'OS') {
+                loadProcessesForNode(initialNodeId, true);
+            }
+
+            // Khi đổi sang server khác
+            $('#serverDropdown').change(function () {
+                loadProcessesForNode($(this).val(), false);
+            });
+
             processDropdown.change(function () {
                 var selected = $(this).find('option:selected');
                 $('#targetProcessInput').val(selected.val());

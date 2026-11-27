@@ -21,23 +21,22 @@ namespace WebAdmin_ControlPlane.Services
             _scopeFactory = scopeFactory;
         }
 
-        // Hàm dùng chung để gửi TCP
-        private async Task<string> SendTcpPacketAsync(string nodeId, object finalPacket)
+        private async Task<string> SendTcpToControllerAsync(object finalPacket)
         {
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var node = await db.ServerNodes.FirstOrDefaultAsync(n => n.NodeId == nodeId);
-            if (node == null) throw new Exception("Không tìm thấy cấu hình Server trong Database.");
+
+            var config = await db.SystemConfigs.FirstOrDefaultAsync();
+            if (config == null) throw new Exception("Chưa cấu hình Controller trong hệ thống.");
 
             using var client = new TcpClient();
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10)); // Tăng lên 10s vì phải chờ Agent trả file
 
             try
             {
-                await client.ConnectAsync(node.IpAddress, node.Port, cts.Token);
+                await client.ConnectAsync(config.ControllerIP, config.ControllerPort, cts.Token);
                 var stream = client.GetStream();
 
-                // Serialize gói tin chứa Payload và Signature
                 string jsonSend = JsonSerializer.Serialize(finalPacket, new JsonSerializerOptions { WriteIndented = false });
                 byte[] data = Encoding.UTF8.GetBytes(jsonSend + "\n");
 
@@ -49,7 +48,7 @@ namespace WebAdmin_ControlPlane.Services
             }
             catch (Exception ex)
             {
-                throw new Exception("Lỗi kết nối TCP: " + ex.Message);
+                throw new Exception("Lỗi kết nối Controller: " + ex.Message);
             }
         }
 
@@ -59,34 +58,29 @@ namespace WebAdmin_ControlPlane.Services
 
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var node = await db.ServerNodes.FirstOrDefaultAsync(n => n.NodeId == policy.NodeId);
-            if (node == null) return (false, "Không tìm thấy Server.");
+            var config = await db.SystemConfigs.FirstOrDefaultAsync();
+            if (config == null) return (false, "Không tìm thấy cấu hình Controller.");
 
             try
             {
-                // 1. Tạo Payload Object
                 long timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 var payloadObj = new
                 {
-                    CommandType = "UpdateOsPolicy",
+                    CommandType = "SetPolicy", // Lệnh gửi cho Controller
+                    NodeId = policy.NodeId,
                     TargetUser = policy.TargetUser ?? "",
                     TargetProcess = policy.TargetProcess ?? "",
                     MaxRamMB = policy.MaxRamMB ?? 100,
-                    Action = policy.OsAction ?? "Pause",
+                    MaxCpuPercent = policy.MaxCpuPercent ?? 0,
+                    ReclaimRam = policy.ReclaimRam,
                     Timestamp = timestamp
                 };
 
-                // 2. Chuyển thành chuỗi String (Không có khoảng trắng thừa)
                 string payloadString = JsonSerializer.Serialize(payloadObj, new JsonSerializerOptions { WriteIndented = false });
-
-                // 3. Băm chuỗi bằng AuthToken
-                string signature = HmacHelper.ComputeHmacSha256(payloadString, node.AuthToken);
-
-                // 4. Đóng gói
+                string signature = HmacHelper.ComputeHmacSha256(payloadString, config.ControllerToken);
                 var finalPacket = new { Payload = payloadString, Signature = signature };
 
-                // 5. Gửi
-                string res = await SendTcpPacketAsync(policy.NodeId, finalPacket);
+                string res = await SendTcpToControllerAsync(finalPacket);
                 return (res.Contains("\"ok\""), res);
             }
             catch (Exception ex)
@@ -101,8 +95,8 @@ namespace WebAdmin_ControlPlane.Services
 
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var node = await db.ServerNodes.FirstOrDefaultAsync(n => n.NodeId == nodeId);
-            if (node == null) return (false, "Không tìm thấy Server.");
+            var config = await db.SystemConfigs.FirstOrDefaultAsync();
+            if (config == null) return (false, "Không tìm thấy cấu hình Controller.");
 
             try
             {
@@ -110,17 +104,86 @@ namespace WebAdmin_ControlPlane.Services
                 var payloadObj = new
                 {
                     CommandType = "RemoveOsPolicy",
+                    NodeId = nodeId,
                     TargetProcess = targetProcess ?? "",
                     TargetUser = targetUser ?? "",
                     Timestamp = timestamp
                 };
 
                 string payloadString = JsonSerializer.Serialize(payloadObj, new JsonSerializerOptions { WriteIndented = false });
-                string signature = HmacHelper.ComputeHmacSha256(payloadString, node.AuthToken);
-
+                string signature = HmacHelper.ComputeHmacSha256(payloadString, config.ControllerToken);
                 var finalPacket = new { Payload = payloadString, Signature = signature };
 
-                string res = await SendTcpPacketAsync(nodeId, finalPacket);
+                string res = await SendTcpToControllerAsync(finalPacket);
+                return (res.Contains("\"ok\""), res);
+            }
+            catch (Exception ex)
+            {
+                return (false, ex.Message);
+            }
+        }
+
+        public async Task<string> GetJobOutputAsync(string jobId, string filename = "result.json")
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var config = await db.SystemConfigs.FirstOrDefaultAsync();
+            if (config == null) throw new Exception("Không tìm thấy cấu hình Controller.");
+
+            long timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var payloadObj = new
+            {
+                CommandType = "GetJobOutput",
+                JobId = jobId,
+                Filename = filename,
+                Timestamp = timestamp
+            };
+
+            string payloadString = JsonSerializer.Serialize(payloadObj, new JsonSerializerOptions { WriteIndented = false });
+            string signature = HmacHelper.ComputeHmacSha256(payloadString, config.ControllerToken);
+            var finalPacket = new { Payload = payloadString, Signature = signature };
+
+            string res = await SendTcpToControllerAsync(finalPacket);
+
+            // Parse JSON trả về
+            using var doc = JsonDocument.Parse(res);
+            if (doc.RootElement.TryGetProperty("status", out var status) && status.GetString() == "ok")
+            {
+                if (doc.RootElement.TryGetProperty("ContentBase64", out var data))
+                {
+                    return data.GetString(); // Trả về chuỗi Base64
+                }
+            }
+            throw new Exception("Lỗi từ Controller: " + res);
+        }
+
+        public async Task<(bool success, string message)> UpdateNetworkPolicyAsync(ResourcePolicy policy)
+        {
+            if (string.IsNullOrEmpty(policy.NodeId)) return (false, "Chưa chọn Server.");
+
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var config = await db.SystemConfigs.FirstOrDefaultAsync();
+            if (config == null) return (false, "Không tìm thấy cấu hình Controller.");
+
+            try
+            {
+                long timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                var payloadObj = new
+                {
+                    CommandType = "SetNetworkPolicy", // Lệnh gửi cho Controller
+                    NodeId = policy.NodeId,
+                    TargetPort = policy.TargetPort ?? 80,
+                    MaxBandwidthKbps = policy.MaxBandwidthKbps ?? 1024,
+                    ApplyToIp = policy.ApplyToIp ?? "All",
+                    Timestamp = timestamp
+                };
+
+                string payloadString = JsonSerializer.Serialize(payloadObj, new JsonSerializerOptions { WriteIndented = false });
+                string signature = HmacHelper.ComputeHmacSha256(payloadString, config.ControllerToken);
+                var finalPacket = new { Payload = payloadString, Signature = signature };
+
+                string res = await SendTcpToControllerAsync(finalPacket); // Hàm gửi TCP đến 9100
                 return (res.Contains("\"ok\""), res);
             }
             catch (Exception ex)

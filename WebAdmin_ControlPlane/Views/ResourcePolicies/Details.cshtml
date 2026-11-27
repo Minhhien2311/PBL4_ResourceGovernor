@@ -1,43 +1,45 @@
 ﻿@model WebAdmin_ControlPlane.Models.ResourcePolicy
 @{
-    ViewData["Title"] = "Chi tiết Chính sách";
+    ViewData["Title"] = "Xóa Chính sách";
 }
 
 <div class="row">
-    <div class="col-md-8 mx-auto">
-        <div class="card">
-            <div class="card-header"><h3 class="card-title">Thông tin Luật</h3></div>
+    <div class="col-md-6 mx-auto">
+        <div class="card card-danger">
+            <div class="card-header"><h3 class="card-title">Xác nhận Xóa</h3></div>
             <div class="card-body">
+                <p class="fs-5">Bạn có chắc chắn muốn xóa luật này không?</p>
                 <dl class="row">
-                    <dt class="col-sm-4">Server Áp Dụng</dt>
-                    <dd class="col-sm-8"><span class="badge bg-secondary fs-6">@Model.NodeId</span></dd>
+                    <dt class="col-sm-4">Server</dt>
+                    <dd class="col-sm-8">@Model.NodeId</dd>
 
-                    <dt class="col-sm-4">Tên Tiến trình</dt>
-                    <dd class="col-sm-8 fs-5 text-primary">@Model.TargetProcess</dd>
+                    @if (Model.PolicyType == "NETWORK")
+                    {
+                        <dt class="col-sm-4">Cổng Mạng</dt>
+                        <dd class="col-sm-8">@Model.TargetPort</dd>
 
-                    <dt class="col-sm-4">User sở hữu</dt>
-                    <dd class="col-sm-8 fs-5 text-primary">@Model.TargetUser</dd>
+                        <dt class="col-sm-4">Giới hạn Băng thông</dt>
+                        <dd class="col-sm-8">@Model.MaxBandwidthKbps Kbps</dd>
+                    }
+                    else
+                    {
+                        <dt class="col-sm-4">Tiến trình</dt>
+                        <dd class="col-sm-8">@Model.TargetProcess</dd>
 
-                    <dt class="col-sm-4">Giới hạn RAM (MB)</dt>
-                    <dd class="col-sm-8 fs-5 text-danger">@Model.MaxRamMB</dd>
-
-                    <dt class="col-sm-4">Hành động vượt ngưỡng</dt>
-                    <dd class="col-sm-8">
-                        @if (Model.OsAction == "Kill")
-                        {
-                            <span class="badge bg-danger fs-6">Kill</span>
-                        }
-                        else
-                        {
-
-                            <span class="badge bg-warning text-dark fs-6">Pause</span>
-                        }
-                    </dd>
+                        <dt class="col-sm-4">User</dt>
+                        <dd class="col-sm-8">@Model.TargetUser</dd>
+                    }
                 </dl>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> Luật sẽ bị gỡ bỏ khỏi Agent/Proxy.
+                </div>
             </div>
             <div class="card-footer">
-                <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-warning">Chỉnh sửa</a>
-                <a asp-action="Index" class="btn btn-secondary">Quay lại</a>
+                <form asp-action="Delete" method="post">
+                    <input type="hidden" asp-for="Id" />
+                    <button type="submit" class="btn btn-danger">Xác nhận Xóa</button>
+                    <a asp-action="Index" class="btn btn-secondary">Quay lại</a>
+                </form>
             </div>
         </div>
     </div>

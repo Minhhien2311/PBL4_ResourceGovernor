@@ -3,19 +3,18 @@
     ViewData["Title"] = "Danh sách Chính sách";
 }
 
-<!-- THÔNG BÁO THÀNH CÔNG / THẤT BẠI -->
 @if (TempData["Success"] != null)
 {
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
+    <div class="alert alert-success alert-dismissible fade show">
         <i class="bi bi-check-circle-fill me-2"></i> @TempData["Success"]
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 }
 @if (TempData["Error"] != null)
 {
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <div class="alert alert-danger alert-dismissible fade show">
         <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["Error"]
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 }
 
@@ -30,11 +29,11 @@
         <table class="table table-hover text-nowrap">
             <thead>
                 <tr>
-                    <th>Server (NodeId)</th>
-                    <th>Tiến trình</th>
-                    <th>User</th>
-                    <th>Giới hạn RAM</th>
-                    <th>Hành động</th>
+                    <th>Server</th>
+                    <th>Loại</th>
+                    <th>Mục tiêu (Process / Port)</th>
+                    <th>User / IP</th>
+                    <th>Giới hạn</th>
                     <th>Thao tác</th>
                 </tr>
             </thead>
@@ -45,23 +44,52 @@
                     {
                         <tr>
                             <td><span class="badge bg-secondary">@item.NodeId</span></td>
-                            <td>@item.TargetProcess</td>
-                            <td>@item.TargetUser</td>
-                            <td>@item.MaxRamMB MB</td>
                             <td>
-                                @if (item.OsAction == "Kill")
+                                @if (item.PolicyType == "NETWORK")
                                 {
-                                    <span class="badge bg-danger">Kill</span>
+                                    <span class="badge bg-info">Network</span>
                                 }
                                 else
                                 {
 
-                                    <span class="badge bg-warning text-dark">Pause</span>
+                                    <span class="badge bg-primary">OS</span>
+                                }
+                            </td>
+                            <td>
+                                @if (item.PolicyType == "NETWORK")
+                                {
+                                    <span>Port @item.TargetPort</span>
+                                }
+                                else
+                                {
+
+                                    <span>@item.TargetProcess</span>
+                                }
+                            </td>
+                            <td>
+                                @if (item.PolicyType == "NETWORK")
+                                {
+                                    <span>@item.ApplyToIp</span>
+                                }
+                                else
+                                {
+
+                                    <span>@item.TargetUser</span>
+                                }
+                            </td>
+                            <td>
+                                @if (item.PolicyType == "NETWORK")
+                                {
+                                    <span>@item.MaxBandwidthKbps Kbps</span>
+                                }
+                                else
+                                {
+
+                                    <span>@item.MaxRamMB MB / @item.MaxCpuPercent%</span>
                                 }
                             </td>
                             <td>
                                 <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-warning btn-sm">Sửa</a>
-                                <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-info btn-sm">Chi tiết</a>
                                 <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-danger btn-sm">Xóa</a>
                             </td>
                         </tr>

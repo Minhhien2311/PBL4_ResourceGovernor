@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WebAdmin_ControlPlane.Data;
 using WebAdmin_ControlPlane.Models;
+using WebAdmin_ControlPlane.Services;
 
 namespace WebAdmin_ControlPlane.Controllers
 {
@@ -10,84 +11,66 @@ namespace WebAdmin_ControlPlane.Controllers
     public class SystemConfigController : Controller
     {
         private readonly AppDbContext _context;
+        private readonly ControllerService _controllerService;
 
-        public SystemConfigController(AppDbContext context)
+        public SystemConfigController(AppDbContext context, ControllerService controllerService)
         {
             _context = context;
+            _controllerService = controllerService;
         }
 
-        // 1. HIỂN THỊ DANH SÁCH
+        // Trang hiển thị: Vừa cấu hình Controller, vừa xem danh sách Server
         public async Task<IActionResult> Index()
         {
-            return View(await _context.ServerNodes.ToListAsync());
-        }
-
-        // 2. THÊM SERVER MỚI (POST)
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddServer(ServerNode node)
-        {
-            // Kiểm tra trùng NodeId (Khóa chính)
-            if (_context.ServerNodes.Any(n => n.NodeId == node.NodeId))
+            // 1. Lấy cấu hình Controller
+            var config = await _context.SystemConfigs.FirstOrDefaultAsync();
+            if (config == null)
             {
-                ModelState.AddModelError("NodeId", "Tên Server (Node ID) này đã tồn tại. Vui lòng chọn tên khác!");
-            }
-
-            if (ModelState.IsValid)
-            {
-                _context.ServerNodes.Add(node);
+                config = new SystemConfig();
+                _context.SystemConfigs.Add(config);
                 await _context.SaveChangesAsync();
-                TempData["Success"] = "Đã thêm Server " + node.NodeId + " thành công!";
-                return RedirectToAction(nameof(Index));
             }
 
-            // Nếu có lỗi (trùng tên hoặc nhập thiếu), load lại trang Index kèm dữ liệu
-            return View("Index", await _context.ServerNodes.ToListAsync());
+            // 2. Gọi Controller lấy danh sách Server đang online (Read-only)
+            List<ControllerServerInfo> servers = new List<ControllerServerInfo>();
+            try
+            {
+                servers = await _controllerService.GetServersAsync();
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = "Không thể lấy danh sách Server từ Controller: " + ex.Message;
+            }
+
+            ViewBag.Servers = servers;
+            return View(config);
         }
 
-        // 3. SỬA SERVER (GET)
-        public async Task<IActionResult> EditServer(string id)
-        {
-            if (id == null) return NotFound();
-
-            var node = await _context.ServerNodes.FindAsync(id);
-            if (node == null) return NotFound();
-
-            return View(node);
-        }
-
-        // 4. SỬA SERVER (POST)
+        // Cập nhật cấu hình Controller
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> EditServer(string id, ServerNode model)
+        public async Task<IActionResult> SaveConfig(SystemConfig model)
         {
-            if (id != model.NodeId) return NotFound();
-
-            if (ModelState.IsValid)
+            if (!ModelState.IsValid)
             {
-                try
-                {
-                    // Chỉ cập nhật IP, Port, Token. Không cập nhật NodeId (Khóa chính).
-                    var node = await _context.ServerNodes.FindAsync(id);
-                    if (node == null) return NotFound();
-
-                    node.IpAddress = model.IpAddress;
-                    node.Port = model.Port;
-                    node.AuthToken = model.AuthToken;
-
-                    _context.Update(node);
-                    await _context.SaveChangesAsync();
-
-                    TempData["Success"] = "Đã cập nhật thông tin Server " + id + " thành công!";
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!_context.ServerNodes.Any(e => e.NodeId == model.NodeId)) return NotFound();
-                    else throw;
-                }
+                TempData["Error"] = "Dữ liệu không hợp lệ.";
                 return RedirectToAction(nameof(Index));
             }
-            return View(model);
+
+            var config = await _context.SystemConfigs.FirstOrDefaultAsync();
+            if (config == null)
+            {
+                config = new SystemConfig();
+                _context.SystemConfigs.Add(config);
+            }
+
+            config.ControllerIP = model.ControllerIP;
+            config.ControllerPort = model.ControllerPort;
+            config.ControllerToken = model.ControllerToken;
+
+            await _context.SaveChangesAsync();
+            TempData["Success"] = "Đã lưu cấu hình kết nối Controller!";
+            return RedirectToAction(nameof(Index));
         }
     }
 }

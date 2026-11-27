@@ -1,59 +1,728 @@
-﻿@model IEnumerable<WebAdmin_ControlPlane.Models.ServerNode>
+﻿@* @model IEnumerable<WebAdmin_ControlPlane.Models.ControllerServerInfo>
 @{
     ViewData["Title"] = "Dashboard";
-    var cache = ViewBag.Cache as WebAdmin_ControlPlane.Services.TelemetryCacheService;
 }
 
-<div class="card">
-    <div class="card-header"><h3 class="card-title">Trạng thái các Server</h3></div>
-    <div class="card-body table-responsive p-0">
-        <table class="table table-hover text-nowrap">
-            <thead>
-                <tr>
-                    <th>Node ID</th>
-                    <th>IP Address</th>
-                    <th>Trạng thái</th>
-                    <th>CPU (%)</th>
-                    <th>RAM (MB)</th>
-                    <th>Processes</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var node in Model)
-                {
-                    // Kiểm tra xem có nhận được heartbeat trong 15 giây qua không
-                    bool isOnline = false;
-                    WebAdmin_ControlPlane.Models.HeartbeatPayload hb = null;
+@if (ViewBag.Error != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @ViewBag.Error
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
 
-                    if (cache != null && cache.LastHeartbeatTimes.ContainsKey(node.NodeId))
-                    {
-                        var lastTime = cache.LastHeartbeatTimes[node.NodeId];
-                        if ((DateTime.Now - lastTime).TotalSeconds <= 15)
-                        {
-                            isOnline = true;
-                            hb = cache.LatestHeartbeats[node.NodeId];
-                        }
-                    }
-
-                    <tr>
-                        <td><strong>@node.NodeId</strong></td>
-                        <td>@node.IpAddress</td>
-                        <td>
-                            @if (isOnline)
-                            {
-                                <span class="badge bg-success"><i class="bi bi-check-circle"></i> Online</span>
-                            }
-                            else
-                            {
-                                <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Offline</span>
-                            }
-                        </td>
-                        <td>@(isOnline ? hb.CPUUsagePercent.ToString("0.0") : "-")</td>
-                        <td>@(isOnline ? $"{hb.UsedRAM} / {hb.TotalRAM}" : "-")</td>
-                        <td>@(isOnline ? hb.ProcessCount.ToString() : "-")</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+<!-- THẺ THỐNG KÊ NHANH -->
+<div class="row">
+    <div class="col-lg-4 col-6">
+        <div class="small-box bg-info">
+            <div class="inner">
+                <h3>@Model.Count()</h3>
+                <p>Tổng số Server</p>
+            </div>
+            <div class="icon">
+                <i class="bi bi-hdd-network"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4 col-6">
+        <div class="small-box bg-success">
+            <div class="inner">
+                <h3>@Model.Count(s => s.State == "ONLINE")</h3>
+                <p>Server Online</p>
+            </div>
+            <div class="icon">
+                <i class="bi bi-check-circle"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4 col-6">
+        <div class="small-box bg-danger">
+            <div class="inner">
+                <h3>@Model.Count(s => s.State != "ONLINE")</h3>
+                <p>Server Offline</p>
+            </div>
+            <div class="icon">
+                <i class="bi bi-x-circle"></i>
+            </div>
+        </div>
     </div>
 </div>
+
+<!-- BIỂU ĐỒ -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card card-primary card-outline">
+            <div class="card-header">
+                <h3 class="card-title"><i class="bi bi-cpu me-2"></i> Mức sử dụng CPU (%)</h3>
+            </div>
+            <div class="card-body">
+                <canvas id="cpuChart" style="min-height: 250px; height: 250px; max-height: 250px; max-width: 100%;"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-success card-outline">
+            <div class="card-header">
+                <h3 class="card-title"><i class="bi bi-memory me-2"></i> Mức sử dụng RAM (MB)</h3>
+            </div>
+            <div class="card-body">
+                <canvas id="ramChart" style="min-height: 250px; height: 250px; max-height: 250px; max-width: 100%;"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- BẢNG CHI TIẾT SERVER -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card card-outline card-info">
+            <div class="card-header">
+                <h3 class="card-title"><i class="bi bi-list-ul me-2"></i> Trạng thái chi tiết các Server</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap">
+                    <thead>
+                        <tr>
+                            <th>Node ID</th>
+                            <th>IP</th>
+                            <th>Trạng thái</th>
+                            <th>CPU (%)</th>
+                            <th>RAM (MB)</th>
+                            <th>Số Process</th>
+                            <th>Ghi chú</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model != null && Model.Any())
+                        {
+                            @foreach (var node in Model)
+                            {
+                                <tr>
+                                    <td><strong>@node.NodeId</strong></td>
+                                    <td>@node.Ip</td>
+                                    <td>
+                                        <span class="badge @(node.State == "ONLINE" ? "bg-success" : (node.State == "DEGRADED" ? "bg-warning" : "bg-danger"))">
+                                            @node.State
+                                        </span>
+                                    </td>
+                                    <td>@node.CPUUsagePercent.ToString("0.0")</td>
+                                    <td>@node.UsedRAM / @node.TotalRAM</td>
+                                    <td>@node.ProcessCount</td>
+                                    <td>@node.Note</td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr><td colspan="7" class="text-center">Không có Server nào hoặc mất kết nối Controller.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <!-- Nhúng Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        $(document).ready(function () {
+            // Lấy dữ liệu từ Model (Razor) chuyển sang JSON cho JS
+            var servers = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+
+            if (servers && servers.length > 0) {
+                var labels = [];
+                var cpuData = [];
+                var ramUsedData = [];
+                var ramTotalData = [];
+                var bgColors = ['#007bff', '#28a745', '#dc3545', '#ffc107', '#17a2b8', '#6f42c1'];
+
+                servers.forEach(function (s, index) {
+                    labels.push(s.nodeId);
+                    cpuData.push(s.cpuUsagePercent);
+                    ramUsedData.push(s.usedRAM);
+                    // (Tùy chọn) Nếu muốn vẽ cột chồng RAM Total
+                    // ramTotalData.push(s.totalRAM);
+                });
+
+                // 1. Vẽ biểu đồ CPU (Dạng Doughnut)
+                var cpuCtx = document.getElementById('cpuChart').getContext('2d');
+                new Chart(cpuCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'CPU Usage (%)',
+                            data: cpuData,
+                            backgroundColor: bgColors,
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.label + ': ' + context.raw + '%';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // 2. Vẽ biểu đồ RAM (Dạng cột - Bar Chart)
+                var ramCtx = document.getElementById('ramChart').getContext('2d');
+                new Chart(ramCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'RAM Đã Dùng (MB)',
+                            data: ramUsedData,
+                            backgroundColor: '#17a2b8',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: { display: true, text: 'Megabytes (MB)' }
+                            }
+                        },
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        }
+                    }
+                });
+            } else {
+                // Nếu không có data, hiển thị thông báo lên canvas
+                var cpuCtx = document.getElementById('cpuChart').getContext('2d');
+                cpuCtx.font = "16px Arial";
+                cpuCtx.fillText("Không có dữ liệu Server", 10, 50);
+            }
+        });
+    </script>
+} *@
+
+@model IEnumerable<WebAdmin_ControlPlane.Models.ControllerServerInfo>
+@{
+    ViewData["Title"] = "Dashboard";
+    var serverList = Model?.ToList() ?? new List<WebAdmin_ControlPlane.Models.ControllerServerInfo>();
+}
+
+@if (ViewBag.Error != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @ViewBag.Error
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<!-- 1. THẺ THỐNG KÊ NHANH -->
+<div class="row">
+    <div class="col-lg-4 col-6">
+        <div class="small-box bg-info">
+            <div class="inner">
+                <h3>@serverList.Count</h3>
+                <p>Tổng số Server</p>
+            </div>
+            <div class="icon">
+                <i class="bi bi-hdd-network"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4 col-6">
+        <div class="small-box bg-success">
+            <div class="inner">
+                <h3>@serverList.Count(s => s.State == "ONLINE")</h3>
+                <p>Server Online</p>
+            </div>
+            <div class="icon">
+                <i class="bi bi-check-circle"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4 col-6">
+        <div class="small-box bg-danger">
+            <div class="inner">
+                <h3>@serverList.Count(s => s.State != "ONLINE")</h3>
+                <p>Server Offline / Lỗi</p>
+            </div>
+            <div class="icon">
+                <i class="bi bi-x-circle"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 2. BIỂU ĐỒ TRÒN CPU & RAM (CÒN TRỐNG / ĐÃ CHIẾM) CHO TỪNG SERVER -->
+<div class="row mt-2" id="serverChartsContainer">
+    @if (serverList.Any())
+    {
+        for (int i = 0; i < serverList.Count; i++)
+        {
+            var node = serverList[i];
+            var isOnline = node.State == "ONLINE";
+            var freeRam = Math.Max(0, node.TotalRAM - node.UsedRAM);
+            var freeCpu = Math.Max(0, 100.0 - node.CPUUsagePercent);
+
+            <div class="col-xl-6 col-12 mb-3">
+                <div class="card @(isOnline ? "card-primary" : "card-secondary") card-outline h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <h3 class="card-title mb-0">
+                                <i class="bi bi-server me-2"></i><strong>@node.NodeId</strong>
+                                <small class="text-muted ms-1">(@node.Ip)</small>
+                            </h3>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge @(isOnline ? "bg-success" : (node.State == "DEGRADED" ? "bg-warning text-dark" : "bg-danger"))">
+                                @node.State
+                            </span>
+                            @if (isOnline)
+                            {
+                                <button type="button"
+                                        class="btn btn-xs btn-outline-primary btn-view-node-procs"
+                                        data-node-id="@node.NodeId"
+                                        title="Xem BXH tiến trình của server này">
+                                    <i class="bi bi-bar-chart-steps"></i> Tiến trình
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        @if (!isOnline)
+                        {
+                            <div class="text-center text-muted py-5">
+                                <i class="bi bi-wifi-off fs-2 d-block mb-2"></i>
+                                Server hiện đang <strong>@node.State</strong>.
+                                @if (!string.IsNullOrEmpty(node.Note))
+                                {
+                                    <div class="small text-danger mt-1">@node.Note</div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="row text-center">
+                                <!-- Biểu đồ tròn CPU -->
+                                <div class="col-6 border-end">
+                                    <h6 class="fw-bold text-primary mb-2">Tài nguyên CPU</h6>
+                                    <div style="position: relative; height: 180px;">
+                                        <canvas id="cpuDoughnut_@i"></canvas>
+                                    </div>
+                                    <div class="mt-2 small">
+                                        <span class="text-danger fw-semibold">Chiếm: @node.CPUUsagePercent.ToString("0.0")%</span>
+                                        <span class="mx-1">|</span>
+                                        <span class="text-success fw-semibold">Trống: @freeCpu.ToString("0.0")%</span>
+                                    </div>
+                                </div>
+
+                                <!-- Biểu đồ tròn RAM -->
+                                <div class="col-6">
+                                    <h6 class="fw-bold text-success mb-2">Tài nguyên RAM</h6>
+                                    <div style="position: relative; height: 180px;">
+                                        <canvas id="ramDoughnut_@i"></canvas>
+                                    </div>
+                                    <div class="mt-2 small">
+                                        <span class="text-danger fw-semibold">Chiếm: @node.UsedRAM MB</span>
+                                        <span class="mx-1">|</span>
+                                        <span class="text-success fw-semibold">Trống: @freeRam MB</span>
+                                        <div class="text-muted">(Tổng: @node.TotalRAM MB)</div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="col-12">
+            <div class="alert alert-warning">Chưa có dữ liệu Server từ Controller.</div>
+        </div>
+    }
+</div>
+
+<!-- 3. BXH TIẾN TRÌNH CHIẾM NHIỀU TÀI NGUYÊN (ĐỂ THEO DÕI & TẠO LUẬT GIỚI HẠN) -->
+<div class="row mt-2">
+    <div class="col-12">
+        <div class="card card-outline card-warning">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h3 class="card-title mb-0">
+                    <i class="bi bi-trophy me-2 text-warning"></i> BXH Tiến trình chiếm dụng tài nguyên
+                </h3>
+
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <!-- Chọn Server -->
+                    <select id="leaderboardServerSelect" class="form-select form-select-sm" style="width: auto; min-width: 180px;">
+                        @foreach (var node in serverList)
+                        {
+                            <option value="@node.NodeId" data-total-ram="@node.TotalRAM" data-state="@node.State">
+                                @node.NodeId (@node.State)
+                            </option>
+                        }
+                    </select>
+
+                    <!-- Chuyển tiêu chí xếp hạng -->
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-warning active" id="btnSortRam">
+                            <i class="bi bi-memory"></i> Top RAM
+                        </button>
+                        <button type="button" class="btn btn-outline-warning" id="btnSortCpu">
+                            <i class="bi bi-cpu"></i> Top CPU
+                        </button>
+                    </div>
+
+                    <!-- Chuyển số lượng hiển thị -->
+                    <select id="leaderboardLimitSelect" class="form-select form-select-sm" style="width: auto;">
+                        <option value="10" selected>Top 10</option>
+                        <option value="20">Top 20</option>
+                        <option value="50">Tất cả (50)</option>
+                    </select>
+
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshLeaderboard" title="Làm mới danh sách">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover table-striped align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 60px;">Hạng</th>
+                            <th style="width: 90px;">PID</th>
+                            <th>Tên tiến trình</th>
+                            <th style="width: 130px;">User</th>
+                            <th style="width: 240px;">RAM chiếm dụng</th>
+                            <th style="width: 200px;">CPU chiếm dụng</th>
+                            <th style="width: 120px;" class="text-center">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboardTableBody">
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">Đang tải dữ liệu tiến trình...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 4. BẢNG TRẠNG THÁI CHI TIẾT CÁC SERVER -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card card-outline card-info">
+            <div class="card-header">
+                <h3 class="card-title"><i class="bi bi-list-ul me-2"></i> Trạng thái chi tiết các Server</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap align-middle">
+                    <thead>
+                        <tr>
+                            <th>Node ID</th>
+                            <th>IP</th>
+                            <th>Trạng thái</th>
+                            <th>CPU (%)</th>
+                            <th>RAM Đã dùng / Tổng (MB)</th>
+                            <th>RAM Còn trống (MB)</th>
+                            <th>Số Process</th>
+                            <th>Ghi chú</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (serverList.Any())
+                        {
+                            @foreach (var node in serverList)
+                            {
+                                var freeRam = Math.Max(0, node.TotalRAM - node.UsedRAM);
+                                <tr>
+                                    <td><strong>@node.NodeId</strong></td>
+                                    <td>@node.Ip</td>
+                                    <td>
+                                        <span class="badge @(node.State == "ONLINE" ? "bg-success" : (node.State == "DEGRADED" ? "bg-warning text-dark" : "bg-danger"))">
+                                            @node.State
+                                        </span>
+                                    </td>
+                                    <td>@node.CPUUsagePercent.ToString("0.0")%</td>
+                                    <td>@node.UsedRAM / @node.TotalRAM MB</td>
+                                    <td class="text-success fw-semibold">@freeRam MB</td>
+                                    <td>@node.ProcessCount</td>
+                                    <td>@node.Note</td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr><td colspan="8" class="text-center">Không có Server nào hoặc mất kết nối Controller.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        $(document).ready(function () {
+            var servers = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(serverList, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase }));
+            var createPolicyBaseUrl = '@Url.Action("Create", "ResourcePolicies")';
+            var getProcessListUrl = '@Url.Action("GetProcessList", "ResourcePolicies")';
+
+            // =========================================================
+            // PHẦN A: VẼ BIỂU ĐỒ TRÒN CPU & RAM CHO TỪNG SERVER
+            // =========================================================
+            if (servers && servers.length > 0) {
+                servers.forEach(function (s, index) {
+                    if (s.state !== 'ONLINE') return;
+
+                    // 1. Doughnut CPU (Chiếm vs Trống)
+                    var cpuCanvas = document.getElementById('cpuDoughnut_' + index);
+                    if (cpuCanvas) {
+                        var usedCpu = Math.min(100, Math.max(0, Number(s.cpuUsagePercent || 0)));
+                        var freeCpu = Number((100 - usedCpu).toFixed(1));
+                        var cpuColor = usedCpu >= 80 ? '#dc3545' : (usedCpu >= 50 ? '#ffc107' : '#0d6efd');
+
+                        new Chart(cpuCanvas.getContext('2d'), {
+                            type: 'doughnut',
+                            data: {
+                                labels: ['CPU Chiếm (%)', 'CPU Trống (%)'],
+                                datasets: [{
+                                    data: [usedCpu, freeCpu],
+                                    backgroundColor: [cpuColor, '#e9ecef'],
+                                    borderWidth: 1
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                cutout: '62%',
+                                plugins: {
+                                    legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function (ctx) {
+                                                return ctx.label + ': ' + ctx.raw + '%';
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    // 2. Doughnut RAM (Chiếm vs Trống)
+                    var ramCanvas = document.getElementById('ramDoughnut_' + index);
+                    if (ramCanvas) {
+                        var totalRam = Math.max(0, Number(s.totalRAM || 0));
+                        var usedRam = Math.min(totalRam, Math.max(0, Number(s.usedRAM || 0)));
+                        var freeRam = Math.max(0, totalRam - usedRam);
+                        var ramRatio = totalRam > 0 ? (usedRam / totalRam) : 0;
+                        var ramColor = ramRatio >= 0.85 ? '#dc3545' : (ramRatio >= 0.65 ? '#ffc107' : '#198754');
+
+                        new Chart(ramCanvas.getContext('2d'), {
+                            type: 'doughnut',
+                            data: {
+                                labels: ['RAM Chiếm (MB)', 'RAM Trống (MB)'],
+                                datasets: [{
+                                    data: [usedRam, freeRam],
+                                    backgroundColor: [ramColor, '#e9ecef'],
+                                    borderWidth: 1
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                cutout: '62%',
+                                plugins: {
+                                    legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function (ctx) {
+                                                var pct = totalRam > 0 ? ((ctx.raw / totalRam) * 100).toFixed(1) : 0;
+                                                return ctx.label + ': ' + ctx.raw + ' MB (' + pct + '%)';
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+
+            // =========================================================
+            // PHẦN B: BXH TIẾN TRÌNH CHIẾM DỤNG RAM / CPU
+            // =========================================================
+            var currentProcesses = [];
+            var sortMode = 'ram'; // 'ram' | 'cpu'
+
+            function loadLeaderboard(nodeId) {
+                var tbody = $('#leaderboardTableBody');
+                if (!nodeId) {
+                    tbody.html('<tr><td colspan="7" class="text-center text-muted py-4">Không có Server khả dụng.</td></tr>');
+                    return;
+                }
+
+                tbody.html('<tr><td colspan="7" class="text-center text-muted py-4">Đang tải danh sách tiến trình từ ' + nodeId + '...</td></tr>');
+
+                $.get(getProcessListUrl, { nodeId: nodeId })
+                    .done(function (data) {
+                        currentProcesses = Array.isArray(data) ? data : [];
+                        renderLeaderboard();
+                    })
+                    .fail(function (xhr) {
+                        var errMsg = xhr.responseText || ('HTTP ' + xhr.status);
+                        tbody.html('<tr><td colspan="7" class="text-center text-danger py-4">Không lấy được danh sách tiến trình: ' + errMsg + '</td></tr>');
+                    });
+            }
+
+            function renderLeaderboard() {
+                var tbody = $('#leaderboardTableBody');
+                var selectedOption = $('#leaderboardServerSelect option:selected');
+                var nodeId = selectedOption.val();
+                var totalServerRam = Number(selectedOption.data('total-ram') || 0);
+                var limit = Number($('#leaderboardLimitSelect').val() || 10);
+
+                if (!currentProcesses || currentProcesses.length === 0) {
+                    tbody.html('<tr><td colspan="7" class="text-center text-muted py-4">Server chưa báo cáo tiến trình nào.</td></tr>');
+                    return;
+                }
+
+                var sorted = currentProcesses.slice().sort(function (a, b) {
+                    if (sortMode === 'cpu') {
+                        var cpuA = (a.cpuPercent ?? a.CpuPercent ?? -1);
+                        var cpuB = (b.cpuPercent ?? b.CpuPercent ?? -1);
+                        return Number(cpuB) - Number(cpuA);
+                    }
+                    var ramA = Number(a.ramMB ?? a.RamMB ?? 0);
+                    var ramB = Number(b.ramMB ?? b.RamMB ?? 0);
+                    return ramB - ramA;
+                });
+
+                var topList = sorted.slice(0, limit);
+                var html = '';
+
+                topList.forEach(function (p, idx) {
+                    var rank = idx + 1;
+                    var rankBadge = rank === 1 ? 'bg-danger' : (rank === 2 ? 'bg-warning text-dark' : (rank === 3 ? 'bg-info text-dark' : 'bg-light text-dark border'));
+
+                    var pid = p.pid ?? p.Pid ?? 0;
+                    var name = p.name || p.Name || '';
+                    var user = p.user || p.User || '';
+                    var ramMB = Number(p.ramMB ?? p.RamMB ?? 0);
+                    var ramPct = totalServerRam > 0 ? Math.min(100, (ramMB / totalServerRam) * 100) : 0;
+                    var ramBarColor = ramPct >= 50 ? 'bg-danger' : (ramPct >= 25 ? 'bg-warning' : 'bg-success');
+
+                    var rawCpu = (p.cpuPercent !== undefined && p.cpuPercent !== null) ? p.cpuPercent : p.CpuPercent;
+                    var cpuHtml = '<span class="badge bg-secondary">N/A</span>';
+                    if (rawCpu !== undefined && rawCpu !== null && !isNaN(rawCpu)) {
+                        var cpuVal = Number(rawCpu);
+                        var cpuWidth = Math.min(100, Math.max(0, cpuVal));
+                        var cpuBarColor = cpuVal >= 80 ? 'bg-danger' : (cpuVal >= 40 ? 'bg-warning' : 'bg-primary');
+                        cpuHtml =
+                            '<div class="d-flex align-items-center gap-2">' +
+                                '<div class="progress flex-grow-1" style="height: 8px;">' +
+                                    '<div class="progress-bar ' + cpuBarColor + '" style="width: ' + cpuWidth + '%;"></div>' +
+                                '</div>' +
+                                '<span class="fw-semibold" style="min-width: 52px; text-align: right;">' + cpuVal.toFixed(1) + '%</span>' +
+                            '</div>';
+                    }
+
+                    // Link chuyển thẳng sang trang Tạo luật với thông tin điền sẵn
+                    var limitUrl = createPolicyBaseUrl +
+                        '?nodeId=' + encodeURIComponent(nodeId) +
+                        '&targetProcess=' + encodeURIComponent(name) +
+                        '&targetUser=' + encodeURIComponent(user);
+
+                    html +=
+                        '<tr>' +
+                            '<td><span class="badge ' + rankBadge + '">#' + rank + '</span></td>' +
+                            '<td><code>' + pid + '</code></td>' +
+                            '<td class="fw-semibold">' + name + '</td>' +
+                            '<td>' + user + '</td>' +
+                            '<td>' +
+                                '<div class="d-flex align-items-center gap-2">' +
+                                    '<div class="progress flex-grow-1" style="height: 8px;">' +
+                                        '<div class="progress-bar ' + ramBarColor + '" style="width: ' + ramPct.toFixed(1) + '%;"></div>' +
+                                    '</div>' +
+                                    '<span class="fw-semibold text-nowrap" style="min-width: 115px; text-align: right;">' +
+                                        ramMB.toFixed(1) + ' MB (' + ramPct.toFixed(1) + '%)' +
+                                    '</span>' +
+                                '</div>' +
+                            '</td>' +
+                            '<td>' + cpuHtml + '</td>' +
+                            '<td class="text-center">' +
+                                '<a href="' + limitUrl + '" class="btn btn-sm btn-outline-danger">' +
+                                    '<i class="bi bi-sliders"></i> Giới hạn' +
+                                '</a>' +
+                            '</td>' +
+                        '</tr>';
+                });
+
+                tbody.html(html);
+            }
+
+            // Sự kiện điều khiển BXH
+            $('#leaderboardServerSelect').change(function () {
+                loadLeaderboard($(this).val());
+            });
+
+            $('#btnSortRam').click(function () {
+                sortMode = 'ram';
+                $(this).removeClass('btn-outline-warning').addClass('btn-warning active');
+                $('#btnSortCpu').removeClass('btn-warning active').addClass('btn-outline-warning');
+                renderLeaderboard();
+            });
+
+            $('#btnSortCpu').click(function () {
+                sortMode = 'cpu';
+                $(this).removeClass('btn-outline-warning').addClass('btn-warning active');
+                $('#btnSortRam').removeClass('btn-warning active').addClass('btn-outline-warning');
+                renderLeaderboard();
+            });
+
+            $('#leaderboardLimitSelect').change(renderLeaderboard);
+
+            $('#btnRefreshLeaderboard').click(function () {
+                loadLeaderboard($('#leaderboardServerSelect').val());
+            });
+
+            // Nút "Tiến trình" trên từng card Server -> cuộn xuống BXH và chọn đúng Server đó
+            $('.btn-view-node-procs').click(function () {
+                var targetNode = $(this).data('node-id');
+                $('#leaderboardServerSelect').val(targetNode).trigger('change');
+                $('html, body').animate({
+                    scrollTop: $('#leaderboardServerSelect').offset().top - 80
+                }, 300);
+            });
+
+            // Tự động chọn Server ONLINE đầu tiên để tải BXH ngay khi mở Dashboard
+            var firstOnlineOption = $('#leaderboardServerSelect option[data-state="ONLINE"]').first();
+            if (firstOnlineOption.length > 0) {
+                $('#leaderboardServerSelect').val(firstOnlineOption.val());
+            }
+            var initialServer = $('#leaderboardServerSelect').val();
+            if (initialServer) {
+                loadLeaderboard(initialServer);
+            }
+        });
+    </script>
+}

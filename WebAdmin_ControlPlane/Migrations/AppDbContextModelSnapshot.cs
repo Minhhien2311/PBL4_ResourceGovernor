@@ -62,14 +62,30 @@ namespace WebAdmin_ControlPlane.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("ApplyToIp")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("MaxBandwidthKbps")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MaxCpuPercent")
+                        .HasColumnType("int");
+
                     b.Property<int?>("MaxRamMB")
                         .HasColumnType("int");
 
                     b.Property<string>("NodeId")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("OsAction")
+                    b.Property<string>("PolicyType")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("ReclaimRam")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("TargetPort")
+                        .HasColumnType("int");
 
                     b.Property<string>("TargetProcess")
                         .HasColumnType("nvarchar(max)");
@@ -82,27 +98,6 @@ namespace WebAdmin_ControlPlane.Migrations
                     b.ToTable("ResourcePolicies");
                 });
 
-            modelBuilder.Entity("WebAdmin_ControlPlane.Models.ServerNode", b =>
-                {
-                    b.Property<string>("NodeId")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("AuthToken")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("IpAddress")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("Port")
-                        .HasColumnType("int");
-
-                    b.HasKey("NodeId");
-
-                    b.ToTable("ServerNodes");
-                });
-
             modelBuilder.Entity("WebAdmin_ControlPlane.Models.SystemConfig", b =>
                 {
                     b.Property<int>("Id")
@@ -110,17 +105,6 @@ namespace WebAdmin_ControlPlane.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AgentIP")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("AgentPort")
-                        .HasColumnType("int");
-
-                    b.Property<string>("AgentToken")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ControllerIP")
                         .IsRequired()

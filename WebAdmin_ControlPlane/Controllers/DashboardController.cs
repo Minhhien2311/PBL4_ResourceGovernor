@@ -1,31 +1,36 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using WebAdmin_ControlPlane.Data;
 using WebAdmin_ControlPlane.Services;
+using WebAdmin_ControlPlane.Models;
 
 namespace WebAdmin_ControlPlane.Controllers
 {
     [Authorize]
     public class DashboardController : Controller
     {
-        private readonly AppDbContext _context;
-        private readonly TelemetryCacheService _cache;
+        private readonly ControllerService _controllerService;
 
-        public DashboardController(AppDbContext context, TelemetryCacheService cache)
+        public DashboardController(ControllerService controllerService)
         {
-            _context = context;
-            _cache = cache;
+            _controllerService = controllerService;
         }
 
         public async Task<IActionResult> Index()
         {
-            // Lấy danh sách server đã cấu hình trong DB
-            var nodes = await _context.ServerNodes.ToListAsync();
+            List<ControllerServerInfo> servers = new List<ControllerServerInfo>();
+            ViewBag.Error = null;
 
-            // Truyền Cache sang View để kiểm tra trạng thái
-            ViewBag.Cache = _cache;
-            return View(nodes);
+            try
+            {
+                // Lấy danh sách server trực tiếp từ Controller
+                servers = await _controllerService.GetServersAsync();
+            }
+            catch (Exception ex)
+            {
+                ViewBag.Error = "Không thể lấy dữ liệu từ Controller: " + ex.Message;
+            }
+
+            return View(servers);
         }
     }
 }

@@ -1,0 +1,3 @@
+NodeId=server-a
+Token=abc123
+RequireHmac=1

@@ -1,9 +1,9 @@
-﻿@model IEnumerable<WebAdmin_ControlPlane.Models.ServerNode>
+﻿@model WebAdmin_ControlPlane.Models.SystemConfig
 @{
-    ViewData["Title"] = "Quản lý Server";
+    ViewData["Title"] = "Cấu hình & Trạng thái Hệ thống";
+    var servers = ViewBag.Servers as List<WebAdmin_ControlPlane.Models.ControllerServerInfo>;
 }
 
-<!-- HIỂN THỊ THÔNG BÁO THÀNH CÔNG -->
 @if (TempData["Success"] != null)
 {
     <div class="alert alert-success alert-dismissible fade show">
@@ -11,71 +11,87 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 }
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
 
 <div class="row">
-    <!-- CỘT TRÁI: FORM THÊM MỚI -->
-    <div class="col-md-5">
-        <div class="card card-success">
-            <div class="card-header"><h3 class="card-title">Thêm Server Mới</h3></div>
-            <form asp-action="AddServer" method="post">
-                <!-- HIỂN THỊ LỖI VALIDATION TẠI ĐÂY -->
-                <div asp-validation-summary="ModelOnly" class="text-danger px-3 pt-2"></div>
-
+    <!-- CỘT TRÁI: FORM CẤU HÌNH CONTROLLER -->
+    <div class="col-md-4">
+        <div class="card card-primary">
+            <div class="card-header"><h3 class="card-title">Cấu hình Controller</h3></div>
+            <form asp-action="SaveConfig" method="post">
                 <div class="card-body">
-                    <div class="form-group mb-2">
-                        <label>Node ID (VD: server-a)</label>
-                        <input name="NodeId" class="form-control" required />
-                        <span class="text-danger small">@Html.ValidationMessage("NodeId")</span>
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                    <input type="hidden" asp-for="Id" />
+
+                    <div class="form-group mb-3">
+                        <label asp-for="ControllerIP" class="control-label"></label>
+                        <input asp-for="ControllerIP" class="form-control" placeholder="VD: 192.168.1.20" required />
+                        <span asp-validation-for="ControllerIP" class="text-danger"></span>
                     </div>
-                    <div class="form-group mb-2">
-                        <label>IP Address</label>
-                        <input name="IpAddress" class="form-control" required />
+                    <div class="form-group mb-3">
+                        <label asp-for="ControllerPort" class="control-label"></label>
+                        <input asp-for="ControllerPort" class="form-control" type="number" required />
+                        <span asp-validation-for="ControllerPort" class="text-danger"></span>
                     </div>
-                    <div class="form-group mb-2">
-                        <label>Port (Mặc định 9001)</label>
-                        <input name="Port" type="number" class="form-control" value="9001" required />
-                    </div>
-                    <div class="form-group mb-2">
-                        <label>Auth Token</label>
-                        <input name="AuthToken" class="form-control" value="abc123" required />
+                    <div class="form-group mb-3">
+                        <label asp-for="ControllerToken" class="control-label"></label>
+                        <input asp-for="ControllerToken" class="form-control" placeholder="Mã bảo mật HMAC" required />
+                        <span asp-validation-for="ControllerToken" class="text-danger"></span>
                     </div>
                 </div>
                 <div class="card-footer">
-                    <button type="submit" class="btn btn-success">Thêm Server</button>
+                    <button type="submit" class="btn btn-primary">Lưu Cấu Hình</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- CỘT PHẢI: BẢNG DANH SÁCH SERVER -->
-    <div class="col-md-7">
-        <div class="card">
-            <div class="card-header"><h3 class="card-title">Danh sách Server</h3></div>
+    <!-- CỘT PHẢI: BẢNG DANH SÁCH SERVER TỪ CONTROLLER -->
+    <div class="col-md-8">
+        <div class="card card-info">
+            <div class="card-header">
+                <h3 class="card-title"><i class="bi bi-hdd-network"></i> Danh sách Server (Từ Controller)</h3>
+            </div>
             <div class="card-body table-responsive p-0">
-                <table class="table table-hover">
+                <table class="table table-hover text-nowrap">
                     <thead>
                         <tr>
                             <th>Node ID</th>
                             <th>IP</th>
-                            <th>Port</th>
-                            <th>Token</th>
-                            <th>Thao tác</th>
+                            <th>Trạng thái</th>
+                            <th>CPU (%)</th>
+                            <th>RAM (MB)</th>
+                            <th>Processes</th>
+                            <th>Ghi chú</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var s in Model)
+                        @if (servers != null && servers.Any())
                         {
-                            <tr>
-                                <td><strong>@s.NodeId</strong></td>
-                                <td>@s.IpAddress</td>
-                                <td>@s.Port</td>
-                                <td>@s.AuthToken</td>
-                                <td>
-                                    <a asp-action="EditServer" asp-route-id="@s.NodeId" class="btn btn-warning btn-sm">
-                                        <i class="bi bi-pencil"></i> Sửa
-                                    </a>
-                                </td>
-                            </tr>
+                            @foreach (var s in servers)
+                            {
+                                <tr>
+                                    <td><strong>@s.NodeId</strong></td>
+                                    <td>@s.Ip</td>
+                                    <td>
+                                        <span class="badge @(s.State == "ONLINE" ? "bg-success" : "bg-danger")">@s.State</span>
+                                    </td>
+                                    <td>@s.CPUUsagePercent.ToString("0.0")</td>
+                                    <td>@s.UsedRAM / @s.TotalRAM</td>
+                                    <td>@s.ProcessCount</td>
+                                    <td>@s.Note</td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr><td colspan="7" class="text-center">Không có Server nào kết nối hoặc mất kết nối Controller.</td></tr>
                         }
                     </tbody>
                 </table>

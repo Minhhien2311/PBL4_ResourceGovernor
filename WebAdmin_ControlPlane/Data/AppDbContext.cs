@@ -9,7 +9,6 @@ namespace WebAdmin_ControlPlane.Data
 
         public DbSet<ResourcePolicy> ResourcePolicies { get; set; }
         public DbSet<SystemConfig> SystemConfigs { get; set; }
-        public DbSet<ServerNode> ServerNodes { get; set; }
 
         public DbSet<EventLog> EventLogs { get; set; }
     }
